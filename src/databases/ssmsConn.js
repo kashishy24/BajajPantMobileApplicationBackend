@@ -5,7 +5,7 @@ var config = {
  user: "Bajaj", // Database username
   password: "Bajaj@123", // Database password
   server: "DESKTOP-URBGBGQ", // Server IP address
-  database: "PPMS_LATLBLR",
+  database: "PPMS_BajajPant",
   options: {
     encrypt: false, // Disable encryption
   },
