@@ -2,8 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const middlewares = require("./src/middlewares/middlewares.js");
-const loginRoute = require("./src/controllers/loginAPI.js");
-const MaintenaceRoute = require("./src/controllers/MaintenanceScreenAPI/BreakdownScreens.js");
+const loginRoute = require("./src/controllers/login/loginAPI.js");
 
 
 const limiter = rateLimit({
@@ -25,7 +24,7 @@ app.use(express.json());
 
 app.use("/api/login", loginRoute);
 
-app.use("/api/Maintenance", MaintenaceRoute);
+
 
 const PORT = process.env.PORT || 5000;
 
@@ -37,3 +36,4 @@ app.listen(PORT, () => {
 app.get("/api/status", (request, response) => {
   middlewares.standardResponse(response, null, 200, "running");
 });
+ 
