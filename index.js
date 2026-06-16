@@ -4,6 +4,7 @@ const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 // const middlewares = require("./src/middlewares/middlewares.js");
 const authRoutes = require("./src/routes/authRoutes");
+const ediRoutes = require("./src/routes/ediRoutes");
 const { connectDB } = require("./src/config/db");
 
 
@@ -25,7 +26,7 @@ app.use(express.json());
 
 
 app.use("/api/login", authRoutes);
-
+app.use("/api/edi", ediRoutes);
 
 
 const PORT = process.env.PORT || 5000;

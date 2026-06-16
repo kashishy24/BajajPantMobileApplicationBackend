@@ -8,8 +8,7 @@ const dbConfig = {
     database: process.env.DB_NAME,
     options: {
         encrypt: false,
-        trustServerCertificate: true,
-        instanceName: "MSSQLSERVER01"
+        trustServerCertificate: true
     }
 };
 
