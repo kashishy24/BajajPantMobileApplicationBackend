@@ -1,15 +1,16 @@
 {
-  "name": "maintainceapp",
+  "name": "bajajpantapp",
   "version": "1.0.0",
-  "description": "App for Lumax Maintaince Module",
+  "description": "App for Bajaj Pant",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "author": "Shubh Vats",
+  "author": "Tanish Gupta",
   "license": "ISC",
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
     "express": "^4.22.1",
     "express-rate-limit": "^7.4.1",
     "moment": "^2.30.1",

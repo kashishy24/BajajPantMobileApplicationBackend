@@ -1,8 +1,10 @@
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
-const middlewares = require("./src/middlewares/middlewares.js");
-const loginRoute = require("./src/controllers/login/loginAPI.js");
+// const middlewares = require("./src/middlewares/middlewares.js");
+const authRoutes = require("./src/routes/authRoutes");
+const { connectDB } = require("./src/config/db");
 
 
 const limiter = rateLimit({
@@ -22,16 +24,22 @@ app.use(limiter);
 app.use(express.json());
 
 
-app.use("/api/login", loginRoute);
+app.use("/api/login", authRoutes);
 
 
 
 const PORT = process.env.PORT || 5000;
 
-// Start the server on port 3000
-app.listen(PORT, () => {
-  console.log("Server Listening on PORT:", PORT);
-});
+
+const startServer = async () => {
+    await connectDB();
+
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+};
+
+startServer();
 
 app.get("/api/status", (request, response) => {
   middlewares.standardResponse(response, null, 200, "running");
