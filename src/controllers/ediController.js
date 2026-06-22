@@ -150,11 +150,128 @@ const bypassMaterial = async (req, res) => {
     }
 };
 
+const sampleCollection = async (req, res) => {
+    try {
+
+        const result = await ediService.sampleCollection(
+            req.body
+        );
+
+        return successResponse(
+            res,
+            result,
+            "Sample Collected Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+const getIQCHoldList = async (req, res) => {
+    try {
+
+        const data =
+            await ediService.getIQCHoldList();
+
+        return successResponse(
+            res,
+            data,
+            "IQC Hold List Fetched Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+const iqcCleared = async (req, res) => {
+    try {
+
+        const result =
+            await ediService.iqcCleared(req.body);
+
+        return successResponse(
+            res,
+            result,
+            "IQC Cleared Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+const getIQCClearedList = async (req, res) => {
+    try {
+
+        const data =
+            await ediService.getIQCClearedList();
+
+        return successResponse(
+            res,
+            data,
+            "IQC Cleared Materials Fetched Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+const getGapMaterials = async (req, res) => {
+    try {
+
+        const data =
+            await ediService.getGapMaterials();
+
+        return successResponse(
+            res,
+            data,
+            "Gap Materials Fetched Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+
 module.exports = {
     getEDIList,
     getEDIDetails,
     getPartDetails,
     validateQuantity,
     getValidatedMaterials,
-    bypassMaterial
+    bypassMaterial,
+    sampleCollection,   
+    getIQCHoldList,
+    iqcCleared,
+    getIQCClearedList,
+    getGapMaterials
 };

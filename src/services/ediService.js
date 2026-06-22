@@ -92,11 +92,73 @@ const bypassMaterial = async (data) => {
 
 };
 
+const sampleCollection = async (data) => {
+
+    const {
+        ediNumber,
+        partId
+    } = data;
+
+    if (!ediNumber)
+        throw new Error("EDI Number is required");
+
+    if (!partId)
+        throw new Error("Part ID is required");
+
+    return await ediRepository.sampleCollection(
+        ediNumber,
+        partId
+    );
+
+};
+
+const getIQCHoldList = async () => {
+
+    return await ediRepository.getIQCHoldList();
+
+};
+
+const iqcCleared = async (data) => {
+
+    const {
+        ediNumber,
+        partId
+    } = data;
+
+    if (!ediNumber)
+        throw new Error("EDI Number is required");
+
+    if (!partId)
+        throw new Error("Part ID is required");
+
+    return await ediRepository.iqcCleared(
+        ediNumber,
+        partId
+    );
+};
+
+const getIQCClearedList = async () => {
+
+    return await ediRepository.getIQCClearedList();
+
+};
+
+const getGapMaterials = async () => {
+
+    return await ediRepository.getGapMaterials();
+
+};
+
 module.exports = {
     getEDIList,
     getEDIDetails,
     getPartDetails,
     validateQuantity,
     getValidatedMaterials,
-    bypassMaterial
+    bypassMaterial,
+    sampleCollection,
+    getIQCHoldList,
+    iqcCleared,
+    getIQCClearedList,
+    getGapMaterials
 };

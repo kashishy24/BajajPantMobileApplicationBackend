@@ -3,6 +3,22 @@ const router = express.Router();
 
 const ediController = require("../controllers/ediController");
 
+
+router.get(
+    "/gap-materials",
+    ediController.getGapMaterials
+);
+
+router.get(
+    "/iqc-cleared",
+    ediController.getIQCClearedList
+);
+
+router.get(
+    "/iqc-hold",
+    ediController.getIQCHoldList
+);
+
 router.get(
     "/validated",
     ediController.getValidatedMaterials
@@ -32,5 +48,16 @@ router.post(
     "/bypass",
     ediController.bypassMaterial
 );
+
+router.post(
+    "/sample-collection",
+    ediController.sampleCollection
+);
+
+router.post(
+    "/iqc-cleared",
+    ediController.iqcCleared
+);
+
 
 module.exports = router;
