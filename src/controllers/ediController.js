@@ -100,9 +100,61 @@ const validateQuantity = async (req, res) => {
     }
 };
 
+const getValidatedMaterials = async (
+    req,
+    res
+) => {
+    try {
+
+         console.log("GET /api/edi/validated called");
+
+        const data =
+            await ediService.getValidatedMaterials();
+
+        return successResponse(
+            res,
+            data,
+            "Validated Materials Fetched Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+const bypassMaterial = async (req, res) => {
+    try {
+
+        const result = await ediService.bypassMaterial(
+            req.body
+        );
+
+        return successResponse(
+            res,
+            result,
+            "Material Bypassed Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
 module.exports = {
     getEDIList,
     getEDIDetails,
     getPartDetails,
-    validateQuantity
+    validateQuantity,
+    getValidatedMaterials,
+    bypassMaterial
 };

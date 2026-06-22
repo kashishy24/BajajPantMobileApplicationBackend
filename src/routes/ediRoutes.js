@@ -4,8 +4,18 @@ const router = express.Router();
 const ediController = require("../controllers/ediController");
 
 router.get(
-    "/",
-    ediController.getEDIList
+    "/validated",
+    ediController.getValidatedMaterials
+);
+
+router.post(
+    "/validate",
+    ediController.validateQuantity
+);
+
+router.get(
+    "/:ediNumber/part/:partId",
+    ediController.getPartDetails
 );
 
 router.get(
@@ -14,13 +24,13 @@ router.get(
 );
 
 router.get(
-    "/:ediNumber/part/:partId",
-    ediController.getPartDetails
+    "/",
+    ediController.getEDIList
 );
 
 router.post(
-    "/validate",
-    ediController.validateQuantity
+    "/bypass",
+    ediController.bypassMaterial
 );
 
 module.exports = router;
