@@ -9,6 +9,11 @@ router.get(
 );
 
 router.get(
+    "/validated",
+    ediController.getValidatedMaterials
+);
+
+router.get(
     "/:ediNumber",
     ediController.getEDIDetails
 );

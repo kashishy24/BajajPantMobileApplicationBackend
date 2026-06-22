@@ -100,9 +100,26 @@ const validateQuantity = async (req, res) => {
     }
 };
 
+const getValidatedMaterials = async (req, res) => {
+    try {
+        const data = await ediService.getValidatedMaterials();
+        return successResponse(
+            res,
+            data,
+            "Validated Materials Fetched Successfully"
+        );
+    } catch (error) {
+        return errorResponse(
+            res,
+            error.message
+        );
+    }
+};
+
 module.exports = {
     getEDIList,
     getEDIDetails,
     getPartDetails,
-    validateQuantity
+    validateQuantity,
+    getValidatedMaterials
 };

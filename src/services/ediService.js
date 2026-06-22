@@ -64,9 +64,14 @@ const validateQuantity = async (data) => {
     );
 };
 
+const getValidatedMaterials = async () => {
+    return await ediRepository.getValidatedMaterials();
+};
+
 module.exports = {
     getEDIList,
     getEDIDetails,
     getPartDetails,
-    validateQuantity
+    validateQuantity,
+    getValidatedMaterials
 };
