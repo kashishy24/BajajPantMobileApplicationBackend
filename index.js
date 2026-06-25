@@ -6,6 +6,7 @@ const rateLimit = require("express-rate-limit");
 const authRoutes = require("./src/routes/authRoutes");
 const ediRoutes = require("./src/routes/ediRoutes");
 const iqcRoutes = require("./src/routes/IQCRoutes");
+const ipqcRoutes = require("./src/routes/ipqcRoutes");
 
 
 
@@ -32,6 +33,7 @@ app.use(express.json());
 app.use("/api/login", authRoutes);
 app.use("/api/edi", ediRoutes);
 app.use("/api/iqc", iqcRoutes);
+app.use("/api/ipqc", ipqcRoutes);
 
 
 const PORT = process.env.PORT || 5000;
