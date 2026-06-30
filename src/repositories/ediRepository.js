@@ -120,7 +120,7 @@ const validateQuantity = async (
 
     updateRequest.input(
         "ValidatedBy",
-        sql.NVarChar,
+        sql.Int,
         userId
     );
 
@@ -145,8 +145,8 @@ const validateQuantity = async (
     await updateRequest.query(`
         UPDATE Material_Receiving
         SET
-            ValidatedQuantity = @ReceivedQty,
-            QuantityValidatedBy = @ValidatedBy,
+            ValidatedQty = @ReceivedQty,
+            ValidatedBy = @ValidatedBy,
             Remark = @Remark,
             Status = 2
         WHERE
@@ -161,9 +161,223 @@ const validateQuantity = async (
     };
 };
 
+const getValidatedMaterials =
+    async () => {
+
+        const result =
+            await new sql.Request().query(`
+                SELECT
+                    MR.EDINumber,
+                    V.VendorName,
+                    CP.PartDesc AS PartName,
+                    MR.ValidatedQty,
+                    MR.SampleCount
+                FROM Material_Receiving MR
+                INNER JOIN Config_Vendor V
+                    ON MR.VendorID = V.VendorID
+                INNER JOIN Config_Part CP
+                    ON MR.PartID = CP.PartID
+                WHERE MR.Status = 2
+                ORDER BY MR.EDINumber
+            `);
+
+        return result.recordset;
+
+    };
+
+const bypassMaterial = async (
+    ediNumber,
+    partId
+) => {
+
+    const request = new sql.Request();
+
+    request.input(
+        "EDINumber",
+        sql.NVarChar,
+        ediNumber
+    );
+
+    request.input(
+        "PartID",
+        sql.NVarChar,
+        partId
+    );
+
+
+    const result = await request.query(`
+        UPDATE Material_Receiving
+        SET
+            Status = 4
+        WHERE
+            EDINumber = @EDINumber
+            AND PartID = @PartID
+    `);
+
+    return {
+        rowsAffected: result.rowsAffected[0]
+    };
+
+};
+
+const sampleCollection = async (
+    ediNumber,
+    partId
+) => {
+
+    const request = new sql.Request();
+
+    request.input(
+        "EDINumber",
+        sql.NVarChar,
+        ediNumber
+    );
+
+    request.input(
+        "PartID",
+        sql.NVarChar,
+        partId
+    );
+
+    const result = await request.query(`
+        UPDATE Material_Receiving
+        SET Status = 5
+        WHERE
+            EDINumber = @EDINumber
+            AND PartID = @PartID
+    `);
+
+    return {
+        rowsAffected: result.rowsAffected[0]
+    };
+
+};
+
+const getIQCHoldList = async () => {
+
+    const result =
+        await new sql.Request().query(`
+            SELECT
+                MR.UID,
+                MR.EDINumber,
+                MR.PartID,
+                CP.PartDesc AS PartName,
+                V.VendorName,
+                MR.Quantity,
+                MR.ValidatedQty,
+                MR.Status
+            FROM Material_Receiving MR
+            INNER JOIN Config_Part CP
+                ON MR.PartID = CP.PartID
+            INNER JOIN Config_Vendor V
+                ON MR.VendorID = V.VendorID
+            WHERE MR.Status = 2
+            ORDER BY MR.EDINumber
+        `);
+
+    return result.recordset;
+};
+
+
+const iqcCleared = async (
+    ediNumber,
+    partId
+) => {
+
+    const request = new sql.Request();
+
+    request.input(
+        "EDINumber",
+        sql.NVarChar,
+        ediNumber
+    );
+
+    request.input(
+        "PartID",
+        sql.NVarChar,
+        partId
+    );
+
+    const result = await request.query(`
+        UPDATE Material_Receiving
+        SET Status = 6,
+        Timestamp = GETDATE()
+        WHERE
+            EDINumber = @EDINumber
+            AND PartID = @PartID
+            AND Status = 5
+    `);
+
+    return {
+        rowsAffected: result.rowsAffected[0]
+    };
+};
+
+const getIQCClearedList = async () => {
+
+    const result =
+        await new sql.Request().query(`
+            SELECT
+                MR.UID,
+                MR.EDINumber,
+                MR.PartID,
+                CP.PartDesc AS PartName,
+                V.VendorName,
+                MR.Quantity,
+                MR.ValidatedQty,
+                MR.Status,
+                MR.Timestamp
+            FROM Material_Receiving MR
+            INNER JOIN Config_Part CP
+                ON MR.PartID = CP.PartID
+            INNER JOIN Config_Vendor V
+                ON MR.VendorID = V.VendorID
+            WHERE MR.Status = 4 OR MR.Status = 6
+            ORDER BY MR.EDINumber
+        `);
+
+    return result.recordset;
+};
+
+const getGapMaterials = async () => {
+
+    const result =
+        await new sql.Request().query(`
+            SELECT
+                MR.UID,
+                MR.EDINumber,
+                MR.PartID,
+                CP.PartDesc AS PartName,
+                V.VendorName,
+                MR.Quantity,
+                MR.ValidatedQty,
+                (MR.Quantity - MR.ValidatedQty) AS GapQty,
+                MR.Remark,
+                MR.Timestamp
+            FROM Material_Receiving MR
+            INNER JOIN Config_Part CP
+                ON MR.PartID = CP.PartID
+            INNER JOIN Config_Vendor V
+                ON MR.VendorID = V.VendorID
+            WHERE
+                MR.ValidatedQty IS NOT NULL
+                AND MR.Quantity <> MR.ValidatedQty
+            ORDER BY MR.EDINumber
+        `);
+
+    return result.recordset;
+};
+    
 module.exports = {
     getEDIList,
     getEDIDetails,
     getPartDetails,
-    validateQuantity
+    validateQuantity,
+    getValidatedMaterials,
+    bypassMaterial,
+    sampleCollection,
+    getIQCHoldList,
+    iqcCleared,
+    getIQCClearedList,
+    getGapMaterials
 }
