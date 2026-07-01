@@ -63,6 +63,10 @@ router.post(
     "/iqc-cleared",
     ediController.iqcCleared
 );
+router.post(
+    "/iqc-failed",
+    ediController.iqcFailed
+);
 
 
 module.exports = router;

@@ -86,6 +86,7 @@ const validateQuantity = async (
     remark
 ) => {
 
+    // Step 1: Get existing record
     const request = new sql.Request();
 
     request.input("EDINumber", sql.NVarChar, ediNumber);
@@ -103,44 +104,58 @@ const validateQuantity = async (
         throw new Error("Record not found");
     }
 
-    const actualQty =
-        existing.recordset[0].Quantity;
+    const actualQty = existing.recordset[0].Quantity;
+    const gap = actualQty - receivedQty;
 
-    const gap =
-        actualQty - receivedQty;
+    // Step 2: Calculate current shift
+    const hour = new Date().getHours();
 
-    const updateRequest =
-        new sql.Request();
+    let currentShift;
 
-    updateRequest.input(
-        "ReceivedQty",
-        sql.Int,
-        receivedQty
-    );
+    if (hour >= 6 && hour < 14) {
+        currentShift = 1;
+    } else if (hour >= 14 && hour < 22) {
+        currentShift = 2;
+    } else {
+        currentShift = 3;
+    }
 
-    updateRequest.input(
-        "ValidatedBy",
-        sql.Int,
-        userId
-    );
+    // Step 3: Check if another entry exists for same PartID, same day & shift
+    const checkRequest = new sql.Request();
 
-    updateRequest.input(
-        "Remark",
-        sql.NVarChar,
-        remark
-    );
+    checkRequest.input("PartID", sql.NVarChar, partId);
+    checkRequest.input("EDINumber", sql.NVarChar, ediNumber);
 
-    updateRequest.input(
-        "EDINumber",
-        sql.NVarChar,
-        ediNumber
-    );
+    const checkResult = await checkRequest.query(`
+        SELECT TOP 1 UID
+        FROM Material_Receiving
+        WHERE
+            PartID = @PartID
+            AND EDINumber <> @EDINumber
+            AND CAST(TimeStamp AS DATE) = CAST(GETDATE() AS DATE)
+            AND (
+                (${currentShift} = 1 AND DATEPART(HOUR, TimeStamp) BETWEEN 6 AND 13)
+                OR
+                (${currentShift} = 2 AND DATEPART(HOUR, TimeStamp) BETWEEN 14 AND 21)
+                OR
+                (${currentShift} = 3 AND (
+                    DATEPART(HOUR, TimeStamp) >= 22
+                    OR DATEPART(HOUR, TimeStamp) < 6
+                ))
+            )
+    `);
 
-    updateRequest.input(
-        "PartID",
-        sql.NVarChar,
-        partId
-    );
+    const status = checkResult.recordset.length > 0 ? 3 : 2;
+
+    // Step 4: Update record
+    const updateRequest = new sql.Request();
+
+    updateRequest.input("ReceivedQty", sql.Int, receivedQty);
+    updateRequest.input("ValidatedBy", sql.Int, userId);
+    updateRequest.input("Remark", sql.NVarChar, remark);
+    updateRequest.input("Status", sql.Int, status);
+    updateRequest.input("EDINumber", sql.NVarChar, ediNumber);
+    updateRequest.input("PartID", sql.NVarChar, partId);
 
     await updateRequest.query(`
         UPDATE Material_Receiving
@@ -148,7 +163,7 @@ const validateQuantity = async (
             ValidatedQty = @ReceivedQty,
             ValidatedBy = @ValidatedBy,
             Remark = @Remark,
-            Status = 2
+            Status = @Status
         WHERE
             EDINumber = @EDINumber
             AND PartID = @PartID
@@ -157,12 +172,12 @@ const validateQuantity = async (
     return {
         expectedQty: actualQty,
         receivedQty,
-        gap
+        gap,
+        status
     };
 };
 
-const getValidatedMaterials =
-    async () => {
+const getValidatedMaterials = async () => {
 
         const result =
             await new sql.Request().query(`
@@ -208,7 +223,7 @@ const bypassMaterial = async (
     const result = await request.query(`
         UPDATE Material_Receiving
         SET
-            Status = 4
+            Status = 6
         WHERE
             EDINumber = @EDINumber
             AND PartID = @PartID
@@ -271,7 +286,7 @@ const getIQCHoldList = async () => {
                 ON MR.PartID = CP.PartID
             INNER JOIN Config_Vendor V
                 ON MR.VendorID = V.VendorID
-            WHERE MR.Status = 2
+            WHERE MR.Status in (2,5)
             ORDER BY MR.EDINumber
         `);
 
@@ -300,7 +315,7 @@ const iqcCleared = async (
 
     const result = await request.query(`
         UPDATE Material_Receiving
-        SET Status = 6,
+        SET Status = 7,
         Timestamp = GETDATE()
         WHERE
             EDINumber = @EDINumber
@@ -332,7 +347,7 @@ const getIQCClearedList = async () => {
                 ON MR.PartID = CP.PartID
             INNER JOIN Config_Vendor V
                 ON MR.VendorID = V.VendorID
-            WHERE MR.Status = 4 OR MR.Status = 6
+            WHERE MR.Status = 7 OR MR.Status = 6 OR MR.Status = 2 OR MR.Status = 3
             ORDER BY MR.EDINumber
         `);
 
@@ -367,6 +382,40 @@ const getGapMaterials = async () => {
 
     return result.recordset;
 };
+
+const iqcFailed = async (
+    ediNumber,
+    partId
+) => {
+
+    const request = new sql.Request();
+
+    request.input(
+        "EDINumber",
+        sql.NVarChar,
+        ediNumber
+    );
+
+    request.input(
+        "PartID",
+        sql.NVarChar,
+        partId
+    );
+
+    const result = await request.query(`
+        UPDATE Material_Receiving
+        SET Status = 8,
+        Timestamp = GETDATE()
+        WHERE
+            EDINumber = @EDINumber
+            AND PartID = @PartID
+            AND Status = 5
+    `);
+
+    return {
+        rowsAffected: result.rowsAffected[0]
+    };
+};
     
 module.exports = {
     getEDIList,
@@ -379,5 +428,6 @@ module.exports = {
     getIQCHoldList,
     iqcCleared,
     getIQCClearedList,
-    getGapMaterials
+    getGapMaterials,
+    iqcFailed
 }

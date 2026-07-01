@@ -64,8 +64,7 @@ const validateQuantity = async (data) => {
     );
 };
 
-const getValidatedMaterials =
-    async () => {
+const getValidatedMaterials = async () => {
 
         return await ediRepository.getValidatedMaterials();
 
@@ -137,6 +136,25 @@ const iqcCleared = async (data) => {
     );
 };
 
+const iqcFailed = async (data) => {
+
+    const {
+        ediNumber,
+        partId
+    } = data;
+
+    if (!ediNumber)
+        throw new Error("EDI Number is required");
+
+    if (!partId)
+        throw new Error("Part ID is required");
+
+    return await ediRepository.iqcFailed(
+        ediNumber,
+        partId
+    );
+};
+
 const getIQCClearedList = async () => {
 
     return await ediRepository.getIQCClearedList();
@@ -159,6 +177,7 @@ module.exports = {
     sampleCollection,
     getIQCHoldList,
     iqcCleared,
+    iqcFailed,
     getIQCClearedList,
     getGapMaterials
 };

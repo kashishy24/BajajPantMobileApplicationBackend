@@ -78,5 +78,5 @@ const getAuditList = async (documentId) => {
 
 module.exports = {
     getScheduledDocuments,
-    getAuditList
+    getAuditList 
 };

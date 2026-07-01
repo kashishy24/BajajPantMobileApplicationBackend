@@ -217,6 +217,28 @@ const iqcCleared = async (req, res) => {
     }
 };
 
+const iqcFailed = async (req, res) => {
+    try {
+
+        const result =
+            await ediService.iqcFailed(req.body);
+
+        return successResponse(
+            res,
+            result,
+            "IQC Failed Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
 const getIQCClearedList = async (req, res) => {
     try {
 
@@ -273,5 +295,6 @@ module.exports = {
     getIQCHoldList,
     iqcCleared,
     getIQCClearedList,
-    getGapMaterials
+    getGapMaterials,
+    iqcFailed
 };
