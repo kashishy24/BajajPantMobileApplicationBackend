@@ -151,7 +151,26 @@ const validateQuantity = async (
     const updateRequest = new sql.Request();
 
     updateRequest.input("ReceivedQty", sql.Int, receivedQty);
-    updateRequest.input("ValidatedBy", sql.Int, userId);
+    // updateRequest.input("ValidatedBy", sql.Int, userId);
+    const userResult = await new sql.Request()
+    .input("UserName", sql.NVarChar, userId)
+    .query(`
+        SELECT UserID
+        FROM Config_User
+        WHERE UserName = @UserName
+    `);
+    
+    if (userResult.recordset.length === 0) {
+        throw new Error("User not found");
+    }
+    
+    const validatedBy = userResult.recordset[0].UserID;
+    
+    updateRequest.input(
+        "ValidatedBy",
+        sql.Int,
+        validatedBy
+    );
     updateRequest.input("Remark", sql.NVarChar, remark);
     updateRequest.input("Status", sql.Int, status);
     updateRequest.input("EDINumber", sql.NVarChar, ediNumber);
@@ -184,6 +203,7 @@ const getValidatedMaterials = async () => {
                 SELECT
                     MR.EDINumber,
                     V.VendorName,
+                    CP.PartID,
                     CP.PartDesc AS PartName,
                     MR.ValidatedQty,
                     MR.SampleCount
