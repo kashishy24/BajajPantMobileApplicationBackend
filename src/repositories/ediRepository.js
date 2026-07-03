@@ -404,37 +404,52 @@ const bypassMaterial = async (
 function getCurrentShiftDetails() {
     const now = new Date();
 
-    const minutes =
-        now.getHours() * 60 + now.getMinutes();
+    const minutes = now.getHours() * 60 + now.getMinutes();
 
-    let shiftStart;
-    let shiftEnd;
+    let shiftEnd = new Date(now);
 
     // Shift A : 07:00 - 15:50
     if (minutes >= 420 && minutes < 950) {
-        shiftStart = 420;
-        shiftEnd = 950;
-    }
 
-    // Shift B : 15:50 - 00:40
+        shiftEnd.setHours(15, 50, 0, 0);
+
+    }
+    // Shift B : 15:50 - 00:40 (next day)
     else if (minutes >= 950 || minutes < 40) {
 
         if (minutes >= 950) {
-            shiftStart = 950;
-            shiftEnd = 1480; // 24:40
-        } else {
-            shiftStart = -10; // Previous day 23:50
-            shiftEnd = 40;
+            // Today 00:40 is already passed, so next day
+            shiftEnd.setDate(shiftEnd.getDate() + 1);
         }
-    }
 
+        shiftEnd.setHours(0, 40, 0, 0);
+
+    }
     // Shift C : 00:40 - 07:00
     else {
-        shiftStart = 40;
-        shiftEnd = 420;
+
+        shiftEnd.setHours(7, 0, 0, 0);
+
     }
 
-    const total = shiftEnd - shiftStart;
+    // Calculate notification
+    let shiftStart;
+    let shiftEndMinutes;
+
+    if (minutes >= 420 && minutes < 950) {
+        shiftStart = 420;
+        shiftEndMinutes = 950;
+    }
+    else if (minutes >= 950 || minutes < 40) {
+        shiftStart = minutes >= 950 ? 950 : -10;
+        shiftEndMinutes = minutes >= 950 ? 1480 : 40;
+    }
+    else {
+        shiftStart = 40;
+        shiftEndMinutes = 420;
+    }
+
+    const total = shiftEndMinutes - shiftStart;
     const current =
         minutes >= shiftStart
             ? minutes - shiftStart
@@ -452,8 +467,8 @@ function getCurrentShiftDetails() {
         notification = 4;
 
     return {
-        percentage,
-        notification
+        notification,
+        shiftEndTime: shiftEnd
     };
 }
 
@@ -566,7 +581,7 @@ const sampleCollection = async (
             ON AL.DocumentID = QD.DocumentID
         WHERE
             AL.PartID = @PartID
-            AND QD.AuditGroup = 'IQC'
+            AND QD.[Group] = 'IQC'
     `);
 
     for (const audit of auditResult.recordset) {
@@ -594,38 +609,55 @@ const sampleCollection = async (
             instanceResult.recordset[0].NextAuditInstanceID;
 
         // STEP 2: Calculate Notification
-        const notification =
-            getCurrentShiftDetails().notification;
+        const shiftDetails = getCurrentShiftDetails();
+
+        const notification = shiftDetails.notification;
+        const endDateTime = shiftDetails.shiftEndTime;
     
         // update tables
         // STEP 3: Update Config_AuditSchedule
         const scheduleRequest = new sql.Request();
 
         scheduleRequest.input("DocumentID", sql.Int, documentID);
-        // scheduleRequest.input("AuditInstanceID", sql.Int, 1);      // decide logic
         scheduleRequest.input("AuditInstanceID", sql.Int, auditInstanceID);
         scheduleRequest.input("Notification", sql.Int, notification);         // Normal
-        scheduleRequest.input("StartDateTime", sql.DateTime, new Date());
         
         await scheduleRequest.query(`
             UPDATE Config_AuditSchedule
             SET
                 AuditInstanceID = @AuditInstanceID,
                 Notification = @Notification,
-                StartDateTime = @StartDateTime
+                StartDateTime = GETDATE(),
+                Status = 1
             WHERE
                 DocumentID = @DocumentID
         `);
 
         // STEP 4: Update QA_AuditMonitoring
 
+        const lineRequest = new sql.Request();
+
+        lineRequest.input("DocumentID", sql.Int, documentID);
+        
+        const lineResult = await lineRequest.query(`
+            SELECT LineID
+            FROM Config_AuditSchedule
+            WHERE DocumentID = @DocumentID
+        `);
+        
+        if (lineResult.recordset.length === 0) {
+            throw new Error("LineID not found for DocumentID");
+        }
+        
+        const lineID = lineResult.recordset[0].LineID;
+
         const monitoringRequest = new sql.Request();
 
-        monitoringRequest.input("LineID", sql.Int, 1); // or fetch actual LineID
+        monitoringRequest.input("LineID", sql.Int, lineID); // or fetch actual LineID
         monitoringRequest.input("AuditListID", sql.Int, auditListID);
         monitoringRequest.input("AuditInstanceID", sql.Int, auditInstanceID);
-        monitoringRequest.input("StartDateTime", sql.DateTime, new Date());
         monitoringRequest.input("Notification", sql.Int, notification);
+        monitoringRequest.input("EndDateTime",sql.DateTime, endDateTime);
         
         await monitoringRequest.query(`
             INSERT INTO QA_AuditMonitoring
@@ -645,8 +677,8 @@ const sampleCollection = async (
                 @LineID,
                 @AuditListID,
                 @AuditInstanceID,
-                @StartDateTime,
-                NULL,
+                GETDATE(),
+                @EndDateTime,
                 NULL,
                 NULL,
                 @Notification,
@@ -679,7 +711,7 @@ const getIQCHoldList = async () => {
                 ON MR.PartID = CP.PartID
             INNER JOIN Config_Vendor V
                 ON MR.VendorID = V.VendorID
-            WHERE MR.Status in (2,5)
+            WHERE MR.Status in (2,5,8)
             ORDER BY MR.EDINumber
         `);
 
