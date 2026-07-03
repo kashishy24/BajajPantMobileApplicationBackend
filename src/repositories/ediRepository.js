@@ -400,6 +400,63 @@ const bypassMaterial = async (
 
 };
 
+
+function getCurrentShiftDetails() {
+    const now = new Date();
+
+    const minutes =
+        now.getHours() * 60 + now.getMinutes();
+
+    let shiftStart;
+    let shiftEnd;
+
+    // Shift A : 07:00 - 15:50
+    if (minutes >= 420 && minutes < 950) {
+        shiftStart = 420;
+        shiftEnd = 950;
+    }
+
+    // Shift B : 15:50 - 00:40
+    else if (minutes >= 950 || minutes < 40) {
+
+        if (minutes >= 950) {
+            shiftStart = 950;
+            shiftEnd = 1480; // 24:40
+        } else {
+            shiftStart = -10; // Previous day 23:50
+            shiftEnd = 40;
+        }
+    }
+
+    // Shift C : 00:40 - 07:00
+    else {
+        shiftStart = 40;
+        shiftEnd = 420;
+    }
+
+    const total = shiftEnd - shiftStart;
+    const current =
+        minutes >= shiftStart
+            ? minutes - shiftStart
+            : (minutes + 1440) - shiftStart;
+
+    const percentage = (current / total) * 100;
+
+    let notification;
+
+    if (percentage <= 70)
+        notification = 2;
+    else if (percentage <= 90)
+        notification = 3;
+    else
+        notification = 4;
+
+    return {
+        percentage,
+        notification
+    };
+}
+
 const sampleCollection = async (
     ediNumber,
     partId,
@@ -516,13 +573,38 @@ const sampleCollection = async (
 
         const auditListID = audit.AuditListID;
         const documentID = audit.DocumentID;
+
+            // STEP 1: Get next AuditInstanceID
+        const instanceRequest = new sql.Request();
+    
+        instanceRequest.input(
+            "DocumentID",
+            sql.Int,
+            documentID
+        );
+    
+        const instanceResult = await instanceRequest.query(`
+            SELECT
+                ISNULL(MAX(AuditInstanceID), 0) + 1 AS NextAuditInstanceID
+            FROM Config_AuditSchedule
+            WHERE DocumentID = @DocumentID
+        `);
+    
+        const auditInstanceID =
+            instanceResult.recordset[0].NextAuditInstanceID;
+
+        // STEP 2: Calculate Notification
+        const notification =
+            getCurrentShiftDetails().notification;
     
         // update tables
+        // STEP 3: Update Config_AuditSchedule
         const scheduleRequest = new sql.Request();
 
         scheduleRequest.input("DocumentID", sql.Int, documentID);
-        scheduleRequest.input("AuditInstanceID", sql.Int, 1);      // decide logic
-        scheduleRequest.input("Notification", sql.Int, 1);         // Normal
+        // scheduleRequest.input("AuditInstanceID", sql.Int, 1);      // decide logic
+        scheduleRequest.input("AuditInstanceID", sql.Int, auditInstanceID);
+        scheduleRequest.input("Notification", sql.Int, notification);         // Normal
         scheduleRequest.input("StartDateTime", sql.DateTime, new Date());
         
         await scheduleRequest.query(`
@@ -535,21 +617,41 @@ const sampleCollection = async (
                 DocumentID = @DocumentID
         `);
 
+        // STEP 4: Update QA_AuditMonitoring
+
         const monitoringRequest = new sql.Request();
 
+        monitoringRequest.input("LineID", sql.Int, 1); // or fetch actual LineID
         monitoringRequest.input("AuditListID", sql.Int, auditListID);
-        monitoringRequest.input("AuditInstanceID", sql.Int, 1);
-        monitoringRequest.input("Notification", sql.Int, 1);
+        monitoringRequest.input("AuditInstanceID", sql.Int, auditInstanceID);
         monitoringRequest.input("StartDateTime", sql.DateTime, new Date());
+        monitoringRequest.input("Notification", sql.Int, notification);
         
         await monitoringRequest.query(`
-            UPDATE QA_AuditMonitoring
-            SET
-                AuditInstanceID = @AuditInstanceID,
-                Notification = @Notification,
-                StartDateTime = @StartDateTime
-            WHERE
-                AuditListID = @AuditListID
+            INSERT INTO QA_AuditMonitoring
+            (
+                LineID,
+                AuditListID,
+                AuditInstanceID,
+                StartDateTime,
+                EndDateTime,
+                ActualStartDateTime,
+                ActualEndDateTime,
+                Notification,
+                Status
+            )
+            VALUES
+            (
+                @LineID,
+                @AuditListID,
+                @AuditInstanceID,
+                @StartDateTime,
+                NULL,
+                NULL,
+                NULL,
+                @Notification,
+                1
+            )
         `);
     }
 
