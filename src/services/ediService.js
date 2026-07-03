@@ -75,7 +75,8 @@ const bypassMaterial = async (data) => {
 
     const {
         ediNumber,
-        partId
+        partId,
+        userId
     } = data;
 
     if (!ediNumber)
@@ -84,9 +85,13 @@ const bypassMaterial = async (data) => {
     if (!partId)
         throw new Error("Part ID is required");
 
+    if (!userId)
+        throw new Error("User ID is required");
+
     return await ediRepository.bypassMaterial(
         ediNumber,
-        partId
+        partId,
+        userId
     );
 
 };
@@ -95,7 +100,8 @@ const sampleCollection = async (data) => {
 
     const {
         ediNumber,
-        partId
+        partId,
+        userId
     } = data;
 
     if (!ediNumber)
@@ -104,9 +110,13 @@ const sampleCollection = async (data) => {
     if (!partId)
         throw new Error("Part ID is required");
 
+    if (!userId)
+        throw new Error("User ID is required");
+
     return await ediRepository.sampleCollection(
         ediNumber,
-        partId
+        partId,
+        userId
     );
 
 };
@@ -121,7 +131,8 @@ const iqcCleared = async (data) => {
 
     const {
         ediNumber,
-        partId
+        partId,
+        userId
     } = data;
 
     if (!ediNumber)
@@ -130,9 +141,13 @@ const iqcCleared = async (data) => {
     if (!partId)
         throw new Error("Part ID is required");
 
+    if (!userId)
+        throw new Error("User ID is required");
+
     return await ediRepository.iqcCleared(
         ediNumber,
-        partId
+        partId,
+        userId
     );
 };
 
@@ -140,7 +155,8 @@ const iqcFailed = async (data) => {
 
     const {
         ediNumber,
-        partId
+        partId,
+        userId
     } = data;
 
     if (!ediNumber)
@@ -149,9 +165,13 @@ const iqcFailed = async (data) => {
     if (!partId)
         throw new Error("Part ID is required");
 
+    if (!userId)
+        throw new Error("User ID is required");
+
     return await ediRepository.iqcFailed(
         ediNumber,
-        partId
+        partId,
+        userId
     );
 };
 

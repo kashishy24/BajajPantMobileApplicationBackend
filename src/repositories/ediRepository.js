@@ -93,7 +93,13 @@ const validateQuantity = async (
     request.input("PartID", sql.NVarChar, partId);
 
     const existing = await request.query(`
-        SELECT Quantity
+        SELECT
+            UID,
+            Quantity,
+            PartID,
+            Status,
+            ValidatedBy,
+            TimeStamp
         FROM Material_Receiving
         WHERE
             EDINumber = @EDINumber
@@ -104,7 +110,51 @@ const validateQuantity = async (
         throw new Error("Record not found");
     }
 
-    const actualQty = existing.recordset[0].Quantity;
+    const material = existing.recordset[0];
+
+    const materialReceivingUID = material.UID;
+    const actualQty = material.Quantity;
+    const currentStatus = material.Status;
+    const currentUser = material.ValidatedBy;
+    const currentTime = material.TimeStamp;
+
+
+    const beforeRequest = new sql.Request();
+
+    beforeRequest.input("EDINumber", sql.Int, materialReceivingUID);
+    beforeRequest.input("PartID", sql.NVarChar, partId);
+    beforeRequest.input("Status", sql.Int, currentStatus);
+    beforeRequest.input("LastUpdatedBy", sql.NVarChar, currentUser);
+    beforeRequest.input("LastUpdatedTime", sql.DateTime, currentTime);
+
+    await beforeRequest.query(`
+        IF NOT EXISTS (
+            SELECT 1
+            FROM Material_Receiving_Geneology
+            WHERE EDINumber = @EDINumber
+            AND PartID = @PartID
+        )
+        BEGIN
+        INSERT INTO Material_Receiving_Geneology
+        (
+            EDINumber,
+            PartID,
+            Status,
+            LastUpdatedBy,
+            LastUpdatedTime
+        )
+        VALUES
+        (
+            @EDINumber,
+            @PartID,
+            @Status,
+            @LastUpdatedBy,
+            @LastUpdatedTime
+        )
+        END
+    `);
+
+    // const actualQty = existing.recordset[0].Quantity;
     const gap = actualQty - receivedQty;
 
     // Step 2: Calculate current shift
@@ -168,7 +218,7 @@ const validateQuantity = async (
     
     updateRequest.input(
         "ValidatedBy",
-        sql.Int,
+        sql.NVarChar,
         validatedBy
     );
     updateRequest.input("Remark", sql.NVarChar, remark);
@@ -182,10 +232,37 @@ const validateQuantity = async (
             ValidatedQty = @ReceivedQty,
             ValidatedBy = @ValidatedBy,
             Remark = @Remark,
-            Status = @Status
+            Status = @Status,
+            TimeStamp = GETDATE()
         WHERE
             EDINumber = @EDINumber
             AND PartID = @PartID
+    `);
+
+    const afterRequest = new sql.Request();
+
+    afterRequest.input("EDINumber", sql.Int, materialReceivingUID);
+    afterRequest.input("PartID", sql.NVarChar, partId);
+    afterRequest.input("Status", sql.Int, status);
+    afterRequest.input("LastUpdatedBy", sql.NVarChar, validatedBy);
+    
+    await afterRequest.query(`
+        INSERT INTO Material_Receiving_Geneology
+        (
+            EDINumber,
+            PartID,
+            Status,
+            LastUpdatedBy,
+            LastUpdatedTime
+        )
+        VALUES
+        (
+            @EDINumber,
+            @PartID,
+            @Status,
+            @LastUpdatedBy,
+            GETDATE()
+        )
     `);
 
     return {
@@ -222,7 +299,8 @@ const getValidatedMaterials = async () => {
 
 const bypassMaterial = async (
     ediNumber,
-    partId
+    partId,
+    userId
 ) => {
 
     const request = new sql.Request();
@@ -239,16 +317,83 @@ const bypassMaterial = async (
         partId
     );
 
+    const fetchRequest = new sql.Request();
+
+    fetchRequest.input("EDINumber", sql.NVarChar, ediNumber);
+    fetchRequest.input("PartID", sql.NVarChar, partId);
+    
+    const existing = await fetchRequest.query(`
+        SELECT UID
+        FROM Material_Receiving
+        WHERE
+            EDINumber = @EDINumber
+            AND PartID = @PartID
+    `);
+    
+    if (existing.recordset.length === 0) {
+        throw new Error("Record not found");
+    }
+
+    const userResult = await new sql.Request()
+    .input("UserName", sql.NVarChar, userId)
+    .query(`
+        SELECT UserID
+        FROM Config_User
+        WHERE UserName = @UserName
+    `);
+    
+    if (userResult.recordset.length === 0) {
+        throw new Error("User not found");
+    }
+    
+    const validatedBy = userResult.recordset[0].UserID;
+
+    request.input(
+    "ValidatedBy",
+    sql.NVarChar, 
+    validatedBy
+    );
+    
+    const materialReceivingUID = existing.recordset[0].UID;
+
 
     const result = await request.query(`
         UPDATE Material_Receiving
         SET
-            Status = 6
+            Status = 6,
+            ValidatedBy = @validatedBy,
+            TimeStamp = GETDATE()
         WHERE
             EDINumber = @EDINumber
             AND PartID = @PartID
     `);
 
+    // Insert into Geneology
+    const genealogyRequest = new sql.Request();
+
+    genealogyRequest.input("EDINumber", sql.Int, materialReceivingUID);
+    genealogyRequest.input("PartID", sql.NVarChar, partId);
+    genealogyRequest.input("Status", sql.Int, 6);
+    genealogyRequest.input("LastUpdatedBy", sql.NVarChar, validatedBy);
+
+    await genealogyRequest.query(`
+        INSERT INTO Material_Receiving_Geneology
+        (
+            EDINumber,
+            PartID,
+            Status,
+            LastUpdatedBy,
+            LastUpdatedTime
+        )
+        VALUES
+        (
+            @EDINumber,
+            @PartID,
+            @Status,
+            @LastUpdatedBy,
+            GETDATE()
+        )
+    `);
     return {
         rowsAffected: result.rowsAffected[0]
     };
@@ -257,7 +402,8 @@ const bypassMaterial = async (
 
 const sampleCollection = async (
     ediNumber,
-    partId
+    partId,
+    userId
 ) => {
 
     const request = new sql.Request();
@@ -274,13 +420,138 @@ const sampleCollection = async (
         partId
     );
 
-    const result = await request.query(`
-        UPDATE Material_Receiving
-        SET Status = 5
+    const fetchRequest = new sql.Request();
+
+    fetchRequest.input("EDINumber", sql.NVarChar, ediNumber);
+    fetchRequest.input("PartID", sql.NVarChar, partId);
+    
+    const existing = await fetchRequest.query(`
+        SELECT UID
+        FROM Material_Receiving
         WHERE
             EDINumber = @EDINumber
             AND PartID = @PartID
     `);
+    
+    if (existing.recordset.length === 0) {
+        throw new Error("Record not found");
+    }
+
+    const userResult = await new sql.Request()
+    .input("UserName", sql.NVarChar, userId)
+    .query(`
+        SELECT UserID
+        FROM Config_User
+        WHERE UserName = @UserName
+    `);
+    
+    if (userResult.recordset.length === 0) {
+        throw new Error("User not found");
+    }
+    
+    const validatedBy = userResult.recordset[0].UserID;
+    
+    request.input(
+    "ValidatedBy",
+    sql.NVarChar, // or sql.Int if the column is INT
+    validatedBy
+    );
+
+    const materialReceivingUID = existing.recordset[0].UID;
+
+    const result = await request.query(`
+        UPDATE Material_Receiving
+        SET Status = 5,
+        ValidatedBy = @validatedBy,
+        TimeStamp = GETDATE()
+        WHERE
+            EDINumber = @EDINumber
+            AND PartID = @PartID
+    `);
+
+    // Insert into Geneology
+    const genealogyRequest = new sql.Request();
+
+    genealogyRequest.input("EDINumber", sql.Int, materialReceivingUID);
+    genealogyRequest.input("PartID", sql.NVarChar, partId);
+    genealogyRequest.input("Status", sql.Int, 5);
+    genealogyRequest.input("LastUpdatedBy", sql.NVarChar, validatedBy);
+
+    await genealogyRequest.query(`
+        INSERT INTO Material_Receiving_Geneology
+        (
+            EDINumber,
+            PartID,
+            Status,
+            LastUpdatedBy,
+            LastUpdatedTime
+        )
+        VALUES
+        (
+            @EDINumber,
+            @PartID,
+            @Status,
+            @LastUpdatedBy,
+            GETDATE()
+        )
+    `);
+
+    const auditRequest = new sql.Request();
+
+    auditRequest.input("PartID", sql.NVarChar, partId);
+    
+    const auditResult = await auditRequest.query(`
+        SELECT
+            AL.AuditListID,
+            AL.DocumentID
+        FROM Config_AuditList AL
+        INNER JOIN Config_QADocumentList QD
+            ON AL.DocumentID = QD.DocumentID
+        WHERE
+            AL.PartID = @PartID
+            AND QD.AuditGroup = 'IQC'
+    `);
+
+    for (const audit of auditResult.recordset) {
+
+        const auditListID = audit.AuditListID;
+        const documentID = audit.DocumentID;
+    
+        // update tables
+        const scheduleRequest = new sql.Request();
+
+        scheduleRequest.input("DocumentID", sql.Int, documentID);
+        scheduleRequest.input("AuditInstanceID", sql.Int, 1);      // decide logic
+        scheduleRequest.input("Notification", sql.Int, 1);         // Normal
+        scheduleRequest.input("StartDateTime", sql.DateTime, new Date());
+        
+        await scheduleRequest.query(`
+            UPDATE Config_AuditSchedule
+            SET
+                AuditInstanceID = @AuditInstanceID,
+                Notification = @Notification,
+                StartDateTime = @StartDateTime
+            WHERE
+                DocumentID = @DocumentID
+        `);
+
+        const monitoringRequest = new sql.Request();
+
+        monitoringRequest.input("AuditListID", sql.Int, auditListID);
+        monitoringRequest.input("AuditInstanceID", sql.Int, 1);
+        monitoringRequest.input("Notification", sql.Int, 1);
+        monitoringRequest.input("StartDateTime", sql.DateTime, new Date());
+        
+        await monitoringRequest.query(`
+            UPDATE QA_AuditMonitoring
+            SET
+                AuditInstanceID = @AuditInstanceID,
+                Notification = @Notification,
+                StartDateTime = @StartDateTime
+            WHERE
+                AuditListID = @AuditListID
+        `);
+    }
 
     return {
         rowsAffected: result.rowsAffected[0]
@@ -313,10 +584,10 @@ const getIQCHoldList = async () => {
     return result.recordset;
 };
 
-
 const iqcCleared = async (
     ediNumber,
-    partId
+    partId,
+    userId
 ) => {
 
     const request = new sql.Request();
@@ -333,14 +604,81 @@ const iqcCleared = async (
         partId
     );
 
+    const fetchRequest = new sql.Request();
+
+    fetchRequest.input("EDINumber", sql.NVarChar, ediNumber);
+    fetchRequest.input("PartID", sql.NVarChar, partId);
+    
+    const existing = await fetchRequest.query(`
+        SELECT UID
+        FROM Material_Receiving
+        WHERE
+            EDINumber = @EDINumber
+            AND PartID = @PartID
+    `);
+    
+    if (existing.recordset.length === 0) {
+        throw new Error("Record not found");
+    }
+
+    const userResult = await new sql.Request()
+    .input("UserName", sql.NVarChar, userId)
+    .query(`
+        SELECT UserID
+        FROM Config_User
+        WHERE UserName = @UserName
+    `);
+    
+    if (userResult.recordset.length === 0) {
+        throw new Error("User not found");
+    }
+    
+    const validatedBy = userResult.recordset[0].UserID;
+    
+    request.input(
+    "ValidatedBy",
+    sql.NVarChar, // or sql.Int if the column is INT
+    validatedBy
+    );
+
+    const materialReceivingUID = existing.recordset[0].UID;
+
     const result = await request.query(`
         UPDATE Material_Receiving
         SET Status = 7,
+        ValidatedBy = @validatedBy,
         Timestamp = GETDATE()
         WHERE
             EDINumber = @EDINumber
             AND PartID = @PartID
             AND Status = 5
+    `);
+
+    // Insert into Geneology
+    const genealogyRequest = new sql.Request();
+
+    genealogyRequest.input("EDINumber", sql.Int, materialReceivingUID);
+    genealogyRequest.input("PartID", sql.NVarChar, partId);
+    genealogyRequest.input("Status", sql.Int, 5);
+    genealogyRequest.input("LastUpdatedBy", sql.NVarChar, validatedBy);
+
+    await genealogyRequest.query(`
+        INSERT INTO Material_Receiving_Geneology
+        (
+            EDINumber,
+            PartID,
+            Status,
+            LastUpdatedBy,
+            LastUpdatedTime
+        )
+        VALUES
+        (
+            @EDINumber,
+            @PartID,
+            @Status,
+            @LastUpdatedBy,
+            GETDATE()
+        )
     `);
 
     return {
@@ -405,7 +743,8 @@ const getGapMaterials = async () => {
 
 const iqcFailed = async (
     ediNumber,
-    partId
+    partId,
+    userId
 ) => {
 
     const request = new sql.Request();
@@ -422,14 +761,81 @@ const iqcFailed = async (
         partId
     );
 
+    const fetchRequest = new sql.Request();
+
+    fetchRequest.input("EDINumber", sql.NVarChar, ediNumber);
+    fetchRequest.input("PartID", sql.NVarChar, partId);
+    
+    const existing = await fetchRequest.query(`
+        SELECT UID
+        FROM Material_Receiving
+        WHERE
+            EDINumber = @EDINumber
+            AND PartID = @PartID
+    `);
+    
+    if (existing.recordset.length === 0) {
+        throw new Error("Record not found");
+    }
+
+    const userResult = await new sql.Request()
+    .input("UserName", sql.NVarChar, userId)
+    .query(`
+        SELECT UserID
+        FROM Config_User
+        WHERE UserName = @UserName
+    `);
+    
+    if (userResult.recordset.length === 0) {
+        throw new Error("User not found");
+    }
+    
+    const validatedBy = userResult.recordset[0].UserID;
+    
+    request.input(
+    "ValidatedBy",
+    sql.NVarChar, // or sql.Int if the column is INT
+    validatedBy
+    );
+
+    const materialReceivingUID = existing.recordset[0].UID;
+
     const result = await request.query(`
         UPDATE Material_Receiving
         SET Status = 8,
+        ValidatedBy = @validatedBy,
         Timestamp = GETDATE()
         WHERE
             EDINumber = @EDINumber
             AND PartID = @PartID
             AND Status = 5
+    `);
+
+    // Insert into Geneology
+    const genealogyRequest = new sql.Request();
+
+    genealogyRequest.input("EDINumber", sql.Int, materialReceivingUID);
+    genealogyRequest.input("PartID", sql.NVarChar, partId);
+    genealogyRequest.input("Status", sql.Int, 8);
+    genealogyRequest.input("LastUpdatedBy", sql.NVarChar, validatedBy);
+
+    await genealogyRequest.query(`
+        INSERT INTO Material_Receiving_Geneology
+        (
+            EDINumber,
+            PartID,
+            Status,
+            LastUpdatedBy,
+            LastUpdatedTime
+        )
+        VALUES
+        (
+            @EDINumber,
+            @PartID,
+            @Status,
+            @LastUpdatedBy,
+            GETDATE()
+        )
     `);
 
     return {
