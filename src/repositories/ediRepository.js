@@ -33,7 +33,7 @@ const getEDIDetails = async (ediNumber) => {
             CP.PartDesc AS PartName,
             MR.Quantity
         FROM Material_Receiving MR
-        INNER JOIN Config_Part CP
+        INNER JOIN Config_PartVariant CP
             ON MR.PartID = CP.PartID
         WHERE MR.EDINumber = @EDINumber
     `);
@@ -64,11 +64,12 @@ const getPartDetails = async (
         SELECT
             MR.EDINumber,
             MR.PartID,
+            CP.EnginePartID AS EnginePartID,
             CP.PartDesc AS PartName,
             CP.PackStdQty AS PackingSTD,
             MR.Quantity
         FROM Material_Receiving MR
-        INNER JOIN Config_Part CP
+        INNER JOIN Config_PartVariant CP
             ON MR.PartID = CP.PartID
         WHERE
             MR.EDINumber = @EDINumber
@@ -105,7 +106,7 @@ const validateQuantity = async (
             EDINumber = @EDINumber
             AND PartID = @PartID
     `);
-
+      
     if (existing.recordset.length === 0) {
         throw new Error("Record not found");
     }
@@ -182,6 +183,7 @@ const validateQuantity = async (
         WHERE
             PartID = @PartID
             AND EDINumber <> @EDINumber
+            AND Status IN (6,7,8,9,10,11)
             AND CAST(TimeStamp AS DATE) = CAST(GETDATE() AS DATE)
             AND (
                 (${currentShift} = 1 AND DATEPART(HOUR, TimeStamp) BETWEEN 6 AND 13)
@@ -195,7 +197,7 @@ const validateQuantity = async (
             )
     `);
 
-    const status = checkResult.recordset.length > 0 ? 3 : 2;
+    const status = checkResult.recordset.length > 0 ? 4 : 3;
 
     // Step 4: Update record
     const updateRequest = new sql.Request();
@@ -225,6 +227,7 @@ const validateQuantity = async (
     updateRequest.input("Status", sql.Int, status);
     updateRequest.input("EDINumber", sql.NVarChar, ediNumber);
     updateRequest.input("PartID", sql.NVarChar, partId);
+    updateRequest.input("BatchID", sql.NVarChar, ediNumber);
 
     await updateRequest.query(`
         UPDATE Material_Receiving
@@ -233,6 +236,7 @@ const validateQuantity = async (
             ValidatedBy = @ValidatedBy,
             Remark = @Remark,
             Status = @Status,
+            BatchID = @BatchID,
             TimeStamp = GETDATE()
         WHERE
             EDINumber = @EDINumber
@@ -265,6 +269,438 @@ const validateQuantity = async (
         )
     `);
 
+    // if (status === 3) {
+
+    // //Insert Into Material_Batch_Wise_Qty
+
+    // const batchRequest = new sql.Request();
+
+    // batchRequest.input("EDINumber", sql.NVarChar, ediNumber);
+    // batchRequest.input("PartID", sql.NVarChar, partId);
+    
+    // const batchResult = await batchRequest.query(`
+    //     SELECT
+    //         VendorID,
+    //         BatchID,
+    //         ValidatedQty
+    //     FROM Material_Receiving
+    //     WHERE
+    //         EDINumber = @EDINumber
+    //         AND PartID = @PartID
+    // `);
+    
+    // if (batchResult.recordset.length === 0) {
+    //     throw new Error("Material Receiving record not found");
+    // }
+    
+    // const {
+    //     VendorID,
+    //     BatchID,
+    //     ValidatedQty
+    // } = batchResult.recordset[0];
+
+    // const insertBatchRequest = new sql.Request();
+
+    // insertBatchRequest.input("PartID", sql.NVarChar, partId);
+    // insertBatchRequest.input("VendorID", sql.Int, VendorID);
+
+    // const areaRequest = new sql.Request();
+
+    // const areaResult = await areaRequest.query(`
+    //     SELECT AreaID
+    //     FROM Config_StorageArea
+    //     WHERE AreaName = 'Store'
+    // `);
+    
+    // if (areaResult.recordset.length === 0) {
+    //     throw new Error("Store Area not found");
+    // }
+    
+    // const areaID = areaResult.recordset[0].AreaID;
+
+    // const priorityRequest = new sql.Request();
+
+    // priorityRequest.input("PartID", sql.NVarChar, partId);
+    
+    // const priorityResult = await priorityRequest.query(`
+    //     SELECT ISNULL(MAX(Priority), 0) + 1 AS NextPriority
+    //     FROM Material_BatchWiseQty
+    //     WHERE PartID = @PartID
+    // `);
+    
+    // const priority = priorityResult.recordset[0].NextPriority;
+    
+    // insertBatchRequest.input("AreaID", sql.Int, areaID);
+    
+    // insertBatchRequest.input("BatchID", sql.NVarChar, BatchID);
+    
+    // // Highest priority for new batch
+    // insertBatchRequest.input("Priority", sql.Int, priority);
+    
+    // insertBatchRequest.input("Quantity", sql.Int, ValidatedQty);
+    // insertBatchRequest.input("Consumed", sql.Int, 0);
+    
+    // // Completed
+    // insertBatchRequest.input("Status", sql.Int, 0);
+    
+    // await insertBatchRequest.query(`
+    //     INSERT INTO Material_BatchWiseQty
+    //     (
+    //         PartID,
+    //         VendorID,
+    //         AreaID,
+    //         BatchID,
+    //         Priority,
+    //         Quantity,
+    //         Consumed,
+    //         Status
+    //     )
+    //     VALUES
+    //     (
+    //         @PartID,
+    //         @VendorID,
+    //         @AreaID,
+    //         @BatchID,
+    //         @Priority,
+    //         @Quantity,
+    //         @Consumed,
+    //         @Status
+    //     )
+    // `);
+
+    // const checkStock = await new sql.Request()
+    // .input("PartID", sql.NVarChar, partId)
+    // .query(`
+    //     SELECT IncomingQty
+    //     FROM Material_Stock
+    //     WHERE PartID = @PartID
+    // `);
+
+    // if (checkStock.recordset.length === 0) {
+    //     throw new Error("Material Stock record not found");
+    // }
+    
+    // if (checkStock.recordset[0].IncomingQty < ValidatedQty) {
+    //     throw new Error("Incoming quantity is less than validated quantity.");
+    // }
+
+    // const stockRequest = new sql.Request();
+
+    // stockRequest.input("PartID", sql.NVarChar, partId);
+    // stockRequest.input("Qty", sql.Int, ValidatedQty);
+    
+    // await stockRequest.query(`
+    //     UPDATE Material_Stock
+    //     SET
+    //         IncomingQty = ISNULL(IncomingQty,0) - @Qty,
+    //         StoreQty    = ISNULL(StoreQty,0) + @Qty
+    //     WHERE
+    //         PartID = @PartID
+    // `);}
+
+    // if (status === 4) {
+
+    // //Insert Into Material_Batch_Wise_Qty
+
+    // const batchRequest = new sql.Request();
+
+    // batchRequest.input("EDINumber", sql.NVarChar, ediNumber);
+    // batchRequest.input("PartID", sql.NVarChar, partId);
+    
+    // const batchResult = await batchRequest.query(`
+    //     SELECT
+    //         VendorID,
+    //         BatchID,
+    //         ValidatedQty
+    //     FROM Material_Receiving
+    //     WHERE
+    //         EDINumber = @EDINumber
+    //         AND PartID = @PartID
+    // `);
+    
+    // if (batchResult.recordset.length === 0) {
+    //     throw new Error("Material Receiving record not found");
+    // }
+    
+    // const {
+    //     VendorID,
+    //     BatchID,
+    //     ValidatedQty
+    // } = batchResult.recordset[0];
+
+    // const insertBatchRequest = new sql.Request();
+
+    // insertBatchRequest.input("PartID", sql.NVarChar, partId);
+    // insertBatchRequest.input("VendorID", sql.Int, VendorID);
+
+    // const areaRequest = new sql.Request();
+
+    // const areaResult = await areaRequest.query(`
+    //     SELECT AreaID
+    //     FROM Config_StorageArea
+    //     WHERE AreaName = 'Store'
+    // `);
+    
+    // if (areaResult.recordset.length === 0) {
+    //     throw new Error("Store Area not found");
+    // }
+    
+    // const areaID = areaResult.recordset[0].AreaID;
+
+    // const priorityRequest = new sql.Request();
+
+    // priorityRequest.input("PartID", sql.NVarChar, partId);
+    
+    // const priorityResult = await priorityRequest.query(`
+    //     SELECT ISNULL(MAX(Priority), 0) + 1 AS NextPriority
+    //     FROM Material_BatchWiseQty
+    //     WHERE PartID = @PartID
+    // `);
+    
+    // const priority = priorityResult.recordset[0].NextPriority;
+    
+    // insertBatchRequest.input("AreaID", sql.Int, areaID);
+    
+    // insertBatchRequest.input("BatchID", sql.NVarChar, BatchID);
+    
+    // // Highest priority for new batch
+    // insertBatchRequest.input("Priority", sql.Int, priority);
+    
+    // insertBatchRequest.input("Quantity", sql.Int, ValidatedQty);
+    // insertBatchRequest.input("Consumed", sql.Int, 0);
+    
+    // // Completed
+    // insertBatchRequest.input("Status", sql.Int, 0);
+    
+    // await insertBatchRequest.query(`
+    //     INSERT INTO Material_BatchWiseQty
+    //     (
+    //         PartID,
+    //         VendorID,
+    //         AreaID,
+    //         BatchID,
+    //         Priority,
+    //         Quantity,
+    //         Consumed,
+    //         Status
+    //     )
+    //     VALUES
+    //     (
+    //         @PartID,
+    //         @VendorID,
+    //         @AreaID,
+    //         @BatchID,
+    //         @Priority,
+    //         @Quantity,
+    //         @Consumed,
+    //         @Status
+    //     )
+    // `);
+
+    // const checkStock = await new sql.Request()
+    // .input("PartID", sql.NVarChar, partId)
+    // .query(`
+    //     SELECT IncomingQty
+    //     FROM Material_Stock
+    //     WHERE PartID = @PartID
+    // `);
+
+    // if (checkStock.recordset.length === 0) {
+    //     throw new Error("Material Stock record not found");
+    // }
+    
+    // if (checkStock.recordset[0].IncomingQty < ValidatedQty) {
+    //     throw new Error("Incoming quantity is less than validated quantity.");
+    // }
+
+    // const stockRequest = new sql.Request();
+
+    // stockRequest.input("PartID", sql.NVarChar, partId);
+    // stockRequest.input("Qty", sql.Int, ValidatedQty);
+    
+    // await stockRequest.query(`
+    //     UPDATE Material_Stock
+    //     SET
+    //         IncomingQty = ISNULL(IncomingQty,0) - @Qty,
+    //         StoreQty    = ISNULL(StoreQty,0) + @Qty
+    //     WHERE
+    //         PartID = @PartID
+    // `);}
+
+    // Fetch data required for stock/batch operations
+    const batchRequest = new sql.Request();
+    
+    batchRequest.input("EDINumber", sql.NVarChar, ediNumber);
+    batchRequest.input("PartID", sql.NVarChar, partId);
+    
+    const batchResult = await batchRequest.query(`
+        SELECT
+            VendorID,
+            BatchID,
+            ValidatedQty
+        FROM Material_Receiving
+        WHERE
+            EDINumber = @EDINumber
+            AND PartID = @PartID
+    `);
+    
+    if (batchResult.recordset.length === 0) {
+        throw new Error("Material Receiving record not found");
+    }
+    
+    const {
+        VendorID,
+        BatchID,
+        ValidatedQty
+    } = batchResult.recordset[0];
+    
+    
+    //======================================================
+    // STATUS = 3
+    //======================================================
+    
+    if (status === 3) {
+    
+        const stockRequest = new sql.Request();
+    
+        stockRequest.input("PartID", sql.NVarChar, partId);
+        stockRequest.input("Qty", sql.Int, ValidatedQty);
+    
+        await stockRequest.query(`
+            UPDATE Material_Stock
+            SET
+                IncomingQty = ISNULL(IncomingQty,0) + @Qty
+            WHERE
+                PartID = @PartID
+        `);
+    
+    }
+    
+    
+    //======================================================
+    // STATUS = 4
+    //======================================================
+    
+    else if (status === 4) {
+    
+        //-------------------------------
+        // Find Store Area
+        //-------------------------------
+    
+        const areaRequest = new sql.Request();
+    
+        const areaResult = await areaRequest.query(`
+            SELECT AreaID
+            FROM Config_StorageArea
+            WHERE AreaName = 'Store'
+        `);
+    
+        if (areaResult.recordset.length === 0) {
+            throw new Error("Store Area not found");
+        }
+    
+        const areaID = areaResult.recordset[0].AreaID;
+    
+    
+        //-------------------------------
+        // Next Batch Priority
+        //-------------------------------
+    
+        const priorityRequest = new sql.Request();
+    
+        priorityRequest.input("PartID", sql.NVarChar, partId);
+    
+        const priorityResult = await priorityRequest.query(`
+            SELECT
+                ISNULL(MAX(Priority),0)+1 AS NextPriority
+            FROM Material_BatchWiseQty
+            WHERE PartID=@PartID
+        `);
+    
+        const priority = priorityResult.recordset[0].NextPriority;
+    
+    
+        //-------------------------------
+        // Insert Batch
+        //-------------------------------
+    
+        const insertBatchRequest = new sql.Request();
+    
+        insertBatchRequest.input("PartID", sql.NVarChar, partId);
+        insertBatchRequest.input("VendorID", sql.Int, VendorID);
+        insertBatchRequest.input("AreaID", sql.Int, areaID);
+        insertBatchRequest.input("BatchID", sql.NVarChar, BatchID);
+        insertBatchRequest.input("Priority", sql.Int, priority);
+        insertBatchRequest.input("Quantity", sql.Int, ValidatedQty);
+        insertBatchRequest.input("Consumed", sql.Int, 0);
+        insertBatchRequest.input("Status", sql.Int, 0);
+    
+        await insertBatchRequest.query(`
+            INSERT INTO Material_BatchWiseQty
+            (
+                PartID,
+                VendorID,
+                AreaID,
+                BatchID,
+                Priority,
+                Quantity,
+                Consumed,
+                Status
+            )
+            VALUES
+            (
+                @PartID,
+                @VendorID,
+                @AreaID,
+                @BatchID,
+                @Priority,
+                @Quantity,
+                @Consumed,
+                @Status
+            )
+        `);
+    
+    
+        //-------------------------------
+        // Check Incoming Qty
+        //-------------------------------
+    
+        const checkStock = await new sql.Request()
+            .input("PartID", sql.NVarChar, partId)
+            .query(`
+                SELECT IncomingQty
+                FROM Material_Stock
+                WHERE PartID=@PartID
+            `);
+    
+        if (checkStock.recordset.length === 0) {
+            throw new Error("Material Stock record not found");
+        }
+    
+        if (checkStock.recordset[0].IncomingQty < ValidatedQty) {
+            throw new Error("Incoming quantity is less than validated quantity.");
+        }
+    
+    
+        //-------------------------------
+        // Move Incoming -> Store
+        //-------------------------------
+    
+        const stockRequest = new sql.Request();
+    
+        stockRequest.input("PartID", sql.NVarChar, partId);
+        stockRequest.input("Qty", sql.Int, ValidatedQty);
+    
+        await stockRequest.query(`
+            UPDATE Material_Stock
+            SET
+                StoreQty    = ISNULL(StoreQty,0) + @Qty
+            WHERE
+                PartID = @PartID
+        `);
+    
+    }
+
     return {
         expectedQty: actualQty,
         receivedQty,
@@ -279,23 +715,23 @@ const getValidatedMaterials = async () => {
             await new sql.Request().query(`
                 SELECT
                     MR.EDINumber,
+                    MR.BatchID,
                     V.VendorName,
                     CP.PartID,
                     CP.PartDesc AS PartName,
-                    MR.ValidatedQty,
-                    MR.SampleCount
+                    MR.ValidatedQty
                 FROM Material_Receiving MR
                 INNER JOIN Config_Vendor V
                     ON MR.VendorID = V.VendorID
-                INNER JOIN Config_Part CP
+                INNER JOIN Config_PartVariant CP
                     ON MR.PartID = CP.PartID
-                WHERE MR.Status = 2
+                WHERE MR.Status = 3
                 ORDER BY MR.EDINumber
             `);
 
         return result.recordset;
 
-    };
+};
 
 const bypassMaterial = async (
     ediNumber,
@@ -360,7 +796,7 @@ const bypassMaterial = async (
     const result = await request.query(`
         UPDATE Material_Receiving
         SET
-            Status = 6,
+            Status = 5,
             ValidatedBy = @validatedBy,
             TimeStamp = GETDATE()
         WHERE
@@ -373,7 +809,7 @@ const bypassMaterial = async (
 
     genealogyRequest.input("EDINumber", sql.Int, materialReceivingUID);
     genealogyRequest.input("PartID", sql.NVarChar, partId);
-    genealogyRequest.input("Status", sql.Int, 6);
+    genealogyRequest.input("Status", sql.Int, 5);
     genealogyRequest.input("LastUpdatedBy", sql.NVarChar, validatedBy);
 
     await genealogyRequest.query(`
@@ -394,12 +830,136 @@ const bypassMaterial = async (
             GETDATE()
         )
     `);
+
+    const batchRequest = new sql.Request();
+
+    batchRequest.input("EDINumber", sql.NVarChar, ediNumber);
+    batchRequest.input("PartID", sql.NVarChar, partId);
+    
+    const batchResult = await batchRequest.query(`
+        SELECT
+            VendorID,
+            BatchID,
+            ValidatedQty
+        FROM Material_Receiving
+        WHERE
+            EDINumber = @EDINumber
+            AND PartID = @PartID
+    `);
+    
+    if (batchResult.recordset.length === 0) {
+        throw new Error("Material Receiving record not found");
+    }
+    
+    const {
+        VendorID,
+        BatchID,
+        ValidatedQty
+    } = batchResult.recordset[0];
+
+    const insertBatchRequest = new sql.Request();
+
+    insertBatchRequest.input("PartID", sql.NVarChar, partId);
+    insertBatchRequest.input("VendorID", sql.Int, VendorID);
+
+    const areaRequest = new sql.Request();
+
+    const areaResult = await areaRequest.query(`
+        SELECT AreaID
+        FROM Config_StorageArea
+        WHERE AreaName = 'Store'
+    `);
+    
+    if (areaResult.recordset.length === 0) {
+        throw new Error("Store Area not found");
+    }
+    
+    const areaID = areaResult.recordset[0].AreaID;
+
+    const priorityRequest = new sql.Request();
+
+    priorityRequest.input("PartID", sql.NVarChar, partId);
+    
+    const priorityResult = await priorityRequest.query(`
+        SELECT ISNULL(MAX(Priority), 0) + 1 AS NextPriority
+        FROM Material_BatchWiseQty
+        WHERE PartID = @PartID
+    `);
+    
+    const priority = priorityResult.recordset[0].NextPriority;
+    
+    insertBatchRequest.input("AreaID", sql.Int, areaID);
+    
+    insertBatchRequest.input("BatchID", sql.NVarChar, BatchID);
+    
+    // Highest priority for new batch
+    insertBatchRequest.input("Priority", sql.Int, priority);
+    
+    insertBatchRequest.input("Quantity", sql.Int, ValidatedQty);
+    insertBatchRequest.input("Consumed", sql.Int, 0);
+    
+    // Completed
+    insertBatchRequest.input("Status", sql.Int, 0);
+    
+    await insertBatchRequest.query(`
+        INSERT INTO Material_BatchWiseQty
+        (
+            PartID,
+            VendorID,
+            AreaID,
+            BatchID,
+            Priority,
+            Quantity,
+            Consumed,
+            Status
+        )
+        VALUES
+        (
+            @PartID,
+            @VendorID,
+            @AreaID,
+            @BatchID,
+            @Priority,
+            @Quantity,
+            @Consumed,
+            @Status
+        )
+    `);
+
+    const checkStock = await new sql.Request()
+    .input("PartID", sql.NVarChar, partId)
+    .query(`
+        SELECT IncomingQty
+        FROM Material_Stock
+        WHERE PartID = @PartID
+    `);
+
+    if (checkStock.recordset.length === 0) {
+        throw new Error("Material Stock record not found");
+    }
+    
+    if (checkStock.recordset[0].IncomingQty < ValidatedQty) {
+        throw new Error("Incoming quantity is less than validated quantity.");
+    }
+
+    const stockRequest = new sql.Request();
+
+    stockRequest.input("PartID", sql.NVarChar, partId);
+    stockRequest.input("Qty", sql.Int, ValidatedQty);
+    
+    await stockRequest.query(`
+        UPDATE Material_Stock
+        SET
+            IncomingQty = ISNULL(IncomingQty,0) - @Qty,
+            StoreQty    = ISNULL(StoreQty,0) + @Qty
+        WHERE
+            PartID = @PartID
+    `);
     return {
         rowsAffected: result.rowsAffected[0]
     };
 
 };
-
 
 function getCurrentShiftDetails() {
     const now = new Date();
@@ -533,8 +1093,10 @@ const sampleCollection = async (
 
     const result = await request.query(`
         UPDATE Material_Receiving
-        SET Status = 5,
+        SET Status = 6,
         ValidatedBy = @validatedBy,
+        SampleQty = 5,
+        SampleLevel = 1,
         TimeStamp = GETDATE()
         WHERE
             EDINumber = @EDINumber
@@ -546,7 +1108,7 @@ const sampleCollection = async (
 
     genealogyRequest.input("EDINumber", sql.Int, materialReceivingUID);
     genealogyRequest.input("PartID", sql.NVarChar, partId);
-    genealogyRequest.input("Status", sql.Int, 5);
+    genealogyRequest.input("Status", sql.Int, 6);
     genealogyRequest.input("LastUpdatedBy", sql.NVarChar, validatedBy);
 
     await genealogyRequest.query(`
@@ -568,124 +1130,124 @@ const sampleCollection = async (
         )
     `);
 
-    const auditRequest = new sql.Request();
+    // const auditRequest = new sql.Request();
 
-    auditRequest.input("PartID", sql.NVarChar, partId);
+    // auditRequest.input("PartID", sql.NVarChar, partId);
     
-    const auditResult = await auditRequest.query(`
-        SELECT
-            AL.AuditListID,
-            AL.DocumentID
-        FROM Config_AuditList AL
-        INNER JOIN Config_QADocumentList QD
-            ON AL.DocumentID = QD.DocumentID
-        WHERE
-            AL.PartID = @PartID
-            AND QD.[Group] = 'IQC'
-    `);
+    // const auditResult = await auditRequest.query(`
+    //     SELECT
+    //         AL.AuditListID,
+    //         AL.DocumentID
+    //     FROM Config_AuditList AL
+    //     INNER JOIN Config_QADocumentList QD
+    //         ON AL.DocumentID = QD.DocumentID
+    //     WHERE
+    //         AL.PartID = @PartID
+    //         AND QD.[Group] = 'IQC'
+    // `);
 
-    for (const audit of auditResult.recordset) {
+    // for (const audit of auditResult.recordset) {
 
-        const auditListID = audit.AuditListID;
-        const documentID = audit.DocumentID;
+    //     const auditListID = audit.AuditListID;
+    //     const documentID = audit.DocumentID;
 
-            // STEP 1: Get next AuditInstanceID
-        const instanceRequest = new sql.Request();
+    //         // STEP 1: Get next AuditInstanceID
+    //     const instanceRequest = new sql.Request();
     
-        instanceRequest.input(
-            "DocumentID",
-            sql.Int,
-            documentID
-        );
+    //     instanceRequest.input(
+    //         "DocumentID",
+    //         sql.Int,
+    //         documentID
+    //     );
     
-        const instanceResult = await instanceRequest.query(`
-            SELECT
-                ISNULL(MAX(AuditInstanceID), 0) + 1 AS NextAuditInstanceID
-            FROM Config_AuditSchedule
-            WHERE DocumentID = @DocumentID
-        `);
+    //     const instanceResult = await instanceRequest.query(`
+    //         SELECT
+    //             ISNULL(MAX(AuditInstanceID), 0) + 1 AS NextAuditInstanceID
+    //         FROM Config_AuditSchedule
+    //         WHERE DocumentID = @DocumentID
+    //     `);
     
-        const auditInstanceID =
-            instanceResult.recordset[0].NextAuditInstanceID;
+    //     const auditInstanceID =
+    //         instanceResult.recordset[0].NextAuditInstanceID;
 
-        // STEP 2: Calculate Notification
-        const shiftDetails = getCurrentShiftDetails();
+    //     // STEP 2: Calculate Notification
+    //     const shiftDetails = getCurrentShiftDetails();
 
-        const notification = shiftDetails.notification;
-        const endDateTime = shiftDetails.shiftEndTime;
+    //     const notification = shiftDetails.notification;
+    //     const endDateTime = shiftDetails.shiftEndTime;
     
-        // update tables
-        // STEP 3: Update Config_AuditSchedule
-        const scheduleRequest = new sql.Request();
+    //     // update tables
+    //     // STEP 3: Update Config_AuditSchedule
+    //     const scheduleRequest = new sql.Request();
 
-        scheduleRequest.input("DocumentID", sql.Int, documentID);
-        scheduleRequest.input("AuditInstanceID", sql.Int, auditInstanceID);
-        scheduleRequest.input("Notification", sql.Int, notification);         // Normal
+    //     scheduleRequest.input("DocumentID", sql.Int, documentID);
+    //     scheduleRequest.input("AuditInstanceID", sql.Int, auditInstanceID);
+    //     scheduleRequest.input("Notification", sql.Int, notification);         // Normal
         
-        await scheduleRequest.query(`
-            UPDATE Config_AuditSchedule
-            SET
-                AuditInstanceID = @AuditInstanceID,
-                Notification = @Notification,
-                StartDateTime = GETDATE(),
-                Status = 1
-            WHERE
-                DocumentID = @DocumentID
-        `);
+    //     await scheduleRequest.query(`
+    //         UPDATE Config_AuditSchedule
+    //         SET
+    //             AuditInstanceID = @AuditInstanceID,
+    //             Notification = @Notification,
+    //             StartDateTime = GETDATE(),
+    //             Status = 1
+    //         WHERE
+    //             DocumentID = @DocumentID
+    //     `);
 
-        // STEP 4: Update QA_AuditMonitoring
+    //     // STEP 4: Update QA_AuditMonitoring
 
-        const lineRequest = new sql.Request();
+    //     const lineRequest = new sql.Request();
 
-        lineRequest.input("DocumentID", sql.Int, documentID);
+    //     lineRequest.input("DocumentID", sql.Int, documentID);
         
-        const lineResult = await lineRequest.query(`
-            SELECT LineID
-            FROM Config_AuditSchedule
-            WHERE DocumentID = @DocumentID
-        `);
+    //     const lineResult = await lineRequest.query(`
+    //         SELECT LineID
+    //         FROM Config_AuditSchedule
+    //         WHERE DocumentID = @DocumentID
+    //     `);
         
-        if (lineResult.recordset.length === 0) {
-            throw new Error("LineID not found for DocumentID");
-        }
+    //     if (lineResult.recordset.length === 0) {
+    //         throw new Error("LineID not found for DocumentID");
+    //     }
         
-        const lineID = lineResult.recordset[0].LineID;
+    //     const lineID = lineResult.recordset[0].LineID;
 
-        const monitoringRequest = new sql.Request();
+    //     const monitoringRequest = new sql.Request();
 
-        monitoringRequest.input("LineID", sql.Int, lineID); // or fetch actual LineID
-        monitoringRequest.input("AuditListID", sql.Int, auditListID);
-        monitoringRequest.input("AuditInstanceID", sql.Int, auditInstanceID);
-        monitoringRequest.input("Notification", sql.Int, notification);
-        monitoringRequest.input("EndDateTime",sql.DateTime, endDateTime);
+    //     monitoringRequest.input("LineID", sql.Int, lineID); // or fetch actual LineID
+    //     monitoringRequest.input("AuditListID", sql.Int, auditListID);
+    //     monitoringRequest.input("AuditInstanceID", sql.Int, auditInstanceID);
+    //     monitoringRequest.input("Notification", sql.Int, notification);
+    //     monitoringRequest.input("EndDateTime",sql.DateTime, endDateTime);
         
-        await monitoringRequest.query(`
-            INSERT INTO QA_AuditMonitoring
-            (
-                LineID,
-                AuditListID,
-                AuditInstanceID,
-                StartDateTime,
-                EndDateTime,
-                ActualStartDateTime,
-                ActualEndDateTime,
-                Notification,
-                Status
-            )
-            VALUES
-            (
-                @LineID,
-                @AuditListID,
-                @AuditInstanceID,
-                GETDATE(),
-                @EndDateTime,
-                NULL,
-                NULL,
-                @Notification,
-                1
-            )
-        `);
-    }
+    //     await monitoringRequest.query(`
+    //         INSERT INTO QA_AuditMonitoring
+    //         (
+    //             LineID,
+    //             AuditListID,
+    //             AuditInstanceID,
+    //             StartDateTime,
+    //             EndDateTime,
+    //             ActualStartDateTime,
+    //             ActualEndDateTime,
+    //             Notification,
+    //             Status
+    //         )
+    //         VALUES
+    //         (
+    //             @LineID,
+    //             @AuditListID,
+    //             @AuditInstanceID,
+    //             GETDATE(),
+    //             @EndDateTime,
+    //             NULL,
+    //             NULL,
+    //             @Notification,
+    //             1
+    //         )
+    //     `);
+    // }
 
     return {
         rowsAffected: result.rowsAffected[0]
@@ -700,6 +1262,7 @@ const getIQCHoldList = async () => {
             SELECT
                 MR.UID,
                 MR.EDINumber,
+                MR.BatchID,
                 MR.PartID,
                 CP.PartDesc AS PartName,
                 V.VendorName,
@@ -711,7 +1274,7 @@ const getIQCHoldList = async () => {
                 ON MR.PartID = CP.PartID
             INNER JOIN Config_Vendor V
                 ON MR.VendorID = V.VendorID
-            WHERE MR.Status in (2,5,8)
+            WHERE MR.Status in (3)
             ORDER BY MR.EDINumber
         `);
 
@@ -815,6 +1378,131 @@ const iqcCleared = async (
         )
     `);
 
+    const batchRequest = new sql.Request();
+
+    batchRequest.input("EDINumber", sql.NVarChar, ediNumber);
+    batchRequest.input("PartID", sql.NVarChar, partId);
+    
+    const batchResult = await batchRequest.query(`
+        SELECT
+            VendorID,
+            BatchID,
+            ValidatedQty
+        FROM Material_Receiving
+        WHERE
+            EDINumber = @EDINumber
+            AND PartID = @PartID
+    `);
+    
+    if (batchResult.recordset.length === 0) {
+        throw new Error("Material Receiving record not found");
+    }
+    
+    const {
+        VendorID,
+        BatchID,
+        ValidatedQty
+    } = batchResult.recordset[0];
+
+    const insertBatchRequest = new sql.Request();
+
+    insertBatchRequest.input("PartID", sql.NVarChar, partId);
+    insertBatchRequest.input("VendorID", sql.Int, VendorID);
+
+    const areaRequest = new sql.Request();
+
+    const areaResult = await areaRequest.query(`
+        SELECT AreaID
+        FROM Config_StorageArea
+        WHERE AreaName = 'Store'
+    `);
+    
+    if (areaResult.recordset.length === 0) {
+        throw new Error("Store Area not found");
+    }
+    
+    const areaID = areaResult.recordset[0].AreaID;
+
+    const priorityRequest = new sql.Request();
+
+    priorityRequest.input("PartID", sql.NVarChar, partId);
+    
+    const priorityResult = await priorityRequest.query(`
+        SELECT ISNULL(MAX(Priority), 0) + 1 AS NextPriority
+        FROM Material_BatchWiseQty
+        WHERE PartID = @PartID
+    `);
+    
+    const priority = priorityResult.recordset[0].NextPriority;
+    
+    insertBatchRequest.input("AreaID", sql.Int, areaID);
+    
+    insertBatchRequest.input("BatchID", sql.NVarChar, BatchID);
+    
+    // Highest priority for new batch
+    insertBatchRequest.input("Priority", sql.Int, priority);
+    
+    insertBatchRequest.input("Quantity", sql.Int, ValidatedQty);
+    insertBatchRequest.input("Consumed", sql.Int, 0);
+    
+    // Completed
+    insertBatchRequest.input("Status", sql.Int, 0);
+    
+    await insertBatchRequest.query(`
+        INSERT INTO Material_BatchWiseQty
+        (
+            PartID,
+            VendorID,
+            AreaID,
+            BatchID,
+            Priority,
+            Quantity,
+            Consumed,
+            Status
+        )
+        VALUES
+        (
+            @PartID,
+            @VendorID,
+            @AreaID,
+            @BatchID,
+            @Priority,
+            @Quantity,
+            @Consumed,
+            @Status
+        )
+    `);
+
+    const checkStock = await new sql.Request()
+    .input("PartID", sql.NVarChar, partId)
+    .query(`
+        SELECT IncomingQty
+        FROM Material_Stock
+        WHERE PartID = @PartID
+    `);
+
+    if (checkStock.recordset.length === 0) {
+        throw new Error("Material Stock record not found");
+    }
+    
+    if (checkStock.recordset[0].IncomingQty < ValidatedQty) {
+        throw new Error("Incoming quantity is less than validated quantity.");
+    }
+
+    const stockRequest = new sql.Request();
+
+    stockRequest.input("PartID", sql.NVarChar, partId);
+    stockRequest.input("Qty", sql.Int, ValidatedQty);
+    
+    await stockRequest.query(`
+        UPDATE Material_Stock
+        SET
+            IncomingQty = ISNULL(IncomingQty,0) - @Qty,
+            StoreQty    = ISNULL(StoreQty,0) + @Qty
+        WHERE
+            PartID = @PartID
+    `);
+
     return {
         rowsAffected: result.rowsAffected[0]
     };
@@ -853,6 +1541,7 @@ const getGapMaterials = async () => {
             SELECT
                 MR.UID,
                 MR.EDINumber,
+                MR.BatchID,
                 MR.PartID,
                 CP.PartDesc AS PartName,
                 V.VendorName,
@@ -969,6 +1658,126 @@ const iqcFailed = async (
             @Status,
             @LastUpdatedBy,
             GETDATE()
+        )
+    `);
+
+    const materialRequest = new sql.Request();
+
+    materialRequest.input("EDINumber", sql.NVarChar, ediNumber);
+    materialRequest.input("PartID", sql.NVarChar, partId);
+    
+    const materialResult = await materialRequest.query(`
+        SELECT
+            VendorID,
+            BatchID,
+            ValidatedQty
+        FROM Material_Receiving
+        WHERE
+            EDINumber = @EDINumber
+            AND PartID = @PartID
+    `);
+    
+    if (materialResult.recordset.length === 0) {
+        throw new Error("Material record not found");
+    }
+    
+    const {
+        VendorID,
+        BatchID,
+        ValidatedQty
+    } = materialResult.recordset[0];
+
+    // const stockRequest = new sql.Request();
+
+    // stockRequest.input("PartID", sql.NVarChar, partId);
+    // stockRequest.input("RejectedQty", sql.Int, ValidatedQty);
+    
+    // await stockRequest.query(`
+    //     UPDATE Material_Stock
+    //     SET
+    //         StoreQty = StoreQty - @RejectedQty
+    //     WHERE
+    //         PartID = @PartID
+    // `);
+
+    const now = new Date();
+
+    const minutes = now.getHours() * 60 + now.getMinutes();
+    
+    const prodShift =
+        (minutes >= 420 && minutes < 950)
+            ? "A"
+            : "B";
+
+    const auditRequest = new sql.Request();
+
+    auditRequest.input("PartID", sql.NVarChar, partId);
+    
+    const auditResult = await auditRequest.query(`
+        SELECT TOP 1
+            QAM.AuditListID,
+            QAM.AuditInstanceID
+        FROM QA_AuditMonitoring QAM
+        INNER JOIN Config_AuditList CAL
+            ON QAM.AuditListID = CAL.AuditListID
+        INNER JOIN Config_QADocumentList QDL
+            ON CAL.DocumentID = QDL.DocumentID
+        WHERE
+            CAL.PartID = @PartID
+            AND QDL.[Group] = 'IQC'
+        ORDER BY QAM.UID DESC
+    `);
+    
+    if (auditResult.recordset.length === 0) {
+        throw new Error("IQC Audit not found");
+    }
+    
+    const {
+        AuditListID,
+        AuditInstanceID
+    } = auditResult.recordset[0];
+
+    const rejectedRequest = new sql.Request();
+
+    rejectedRequest.input("PartID", sql.NVarChar, partId);
+    rejectedRequest.input("VendorID", sql.Int, VendorID);
+    rejectedRequest.input("EDINumber", sql.NVarChar, ediNumber);
+    rejectedRequest.input("AuditListID", sql.Int, AuditListID);
+    rejectedRequest.input("AuditInstanceID", sql.Int, AuditInstanceID);
+    rejectedRequest.input("BatchID", sql.NVarChar, BatchID);
+    rejectedRequest.input("Quantity", sql.Int, ValidatedQty);
+    rejectedRequest.input("ProdShift", sql.NVarChar, prodShift);
+    
+    await rejectedRequest.query(`
+        INSERT INTO Material_Rejected
+        (
+            Timestamp,
+            PartID,
+            VendorID,
+            RejectionSource,
+            EDINumber,
+            AuditListID,
+            AuditInstanceID,
+            ProdDate,
+            ProdShift,
+            BatchID,
+            Quantity,
+            Status
+        )
+        VALUES
+        (
+            GETDATE(),
+            @PartID,
+            @VendorID,
+            1,
+            @EDINumber,
+            @AuditListID,
+            @AuditInstanceID,
+            CAST(GETDATE() AS DATE),
+            @ProdShift,
+            @BatchID,
+            @Quantity,
+            1
         )
     `);
 

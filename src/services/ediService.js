@@ -175,6 +175,32 @@ const iqcFailed = async (data) => {
     );
 };
 
+const iqcFailedCheck = async (data) => {
+
+    const {
+        ediNumber,
+        partId,
+        userId,
+        okQty,
+        nokQty
+    } = data;
+
+    if (!ediNumber)
+        throw new Error("EDI Number is required");
+
+    if (!partId)
+        throw new Error("Part ID is required");
+
+    if (!userId)
+        throw new Error("User ID is required");
+
+    return await ediRepository.iqcFailed(
+        ediNumber,
+        partId,
+        userId
+    );
+};
+
 const getIQCClearedList = async () => {
 
     return await ediRepository.getIQCClearedList();

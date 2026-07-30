@@ -7,6 +7,8 @@ const authRoutes = require("./src/routes/authRoutes");
 const ediRoutes = require("./src/routes/ediRoutes");
 const iqcRoutes = require("./src/routes/IQCRoutes");
 const ipqcRoutes = require("./src/routes/ipqcRoutes");
+const materialStoreRoutes = require("./src/routes/materialStoreRoutes");
+const ticketRoutes = require("./src/routes/ticketRoutes");
 
 
 
@@ -34,7 +36,8 @@ app.use("/api/login", authRoutes);
 app.use("/api/edi", ediRoutes);
 app.use("/api/iqc", iqcRoutes);
 app.use("/api/ipqc", ipqcRoutes);
-
+app.use("/api/material-store", materialStoreRoutes);
+app.use("/api/tickets", ticketRoutes);
 
 const PORT = process.env.PORT || 5000;
 
