@@ -25,6 +25,11 @@ router.get(
 );
 
 router.post(
+    "/confirmIQC",
+    ediController.confirmIQC
+);
+
+router.post(
     "/validate",
     ediController.validateQuantity
 );

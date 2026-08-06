@@ -36,6 +36,27 @@ const getPartDetails = async (
     );
 };
 
+const confirmIQC = async (data) => {
+
+    const {
+        ediNumber,
+        partId,
+        userId
+    } = data;
+
+    if (!ediNumber)
+        throw new Error("EDI Number is required");
+
+    if (!partId)
+        throw new Error("Part ID is required");
+
+    return await ediRepository.confirmIQC(
+        ediNumber,
+        partId,
+        userId
+    );
+};
+
 const validateQuantity = async (data) => {
 
     const {
@@ -68,8 +89,7 @@ const getValidatedMaterials = async () => {
 
         return await ediRepository.getValidatedMaterials();
 
-    };
-
+};
 
 const bypassMaterial = async (data) => {
 
@@ -217,6 +237,7 @@ module.exports = {
     getEDIList,
     getEDIDetails,
     getPartDetails,
+    confirmIQC,
     validateQuantity,
     getValidatedMaterials,
     bypassMaterial,

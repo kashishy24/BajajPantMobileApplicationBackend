@@ -150,6 +150,31 @@ const bypassMaterial = async (req, res) => {
     }
 };
 
+
+const confirmIQC = async (req, res) => {
+    try {
+
+        const result = await ediService.confirmIQC(
+            req.body
+        );
+
+        return successResponse(
+            res,
+            result,
+            "IQC Confirmed Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+
 const sampleCollection = async (req, res) => {
     try {
 
@@ -291,6 +316,7 @@ module.exports = {
     validateQuantity,
     getValidatedMaterials,
     bypassMaterial,
+    confirmIQC,
     sampleCollection,   
     getIQCHoldList,
     iqcCleared,
