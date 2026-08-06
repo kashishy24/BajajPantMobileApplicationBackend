@@ -1776,7 +1776,7 @@ const getIQCHoldList = async () => {
                 MR.ValidatedQty,
                 MR.Status
             FROM Material_Receiving MR
-            INNER JOIN Config_Part CP
+            INNER JOIN Config_PartVariant CP
                 ON MR.PartID = CP.PartID
             INNER JOIN Config_Vendor V
                 ON MR.VendorID = V.VendorID
@@ -2029,7 +2029,7 @@ const getIQCClearedList = async () => {
                 MR.Status,
                 MR.Timestamp
             FROM Material_Receiving MR
-            INNER JOIN Config_Part CP
+            INNER JOIN Config_PartVariant CP
                 ON MR.PartID = CP.PartID
             INNER JOIN Config_Vendor V
                 ON MR.VendorID = V.VendorID
@@ -2057,7 +2057,7 @@ const getGapMaterials = async () => {
                 MR.Remark,
                 MR.Timestamp
             FROM Material_Receiving MR
-            INNER JOIN Config_Part CP
+            INNER JOIN Config_PartVariant CP
                 ON MR.PartID = CP.PartID
             INNER JOIN Config_Vendor V
                 ON MR.VendorID = V.VendorID
