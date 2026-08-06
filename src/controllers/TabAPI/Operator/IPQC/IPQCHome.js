@@ -434,7 +434,64 @@ const approveIPQCAudit = async (req, res) => {
     );
   }
 };
+// API to update IPQC History Checkpoint Result (1 = OK, 2 = NOK)
+const updateIPQCHistoryCheckpointResult = async (req, res) => {
+  try {
+    const {
+      DocumentID,
+      AuditListID,
+      UID,
+      AuditInstanceID,
+      Result,
+      Remark,
+    } = req.body;
 
+    if (
+      DocumentID == null ||
+      AuditListID == null ||
+      UID == null ||
+      AuditInstanceID == null ||
+      Result == null
+    ) {
+      return errorResponse(
+        res,
+        "DocumentID, AuditListID, UID, AuditInstanceID and Result are required",
+        400
+      );
+    }
+
+    const request = new sql.Request();
+
+    const dbResult = await request
+      .input("DocumentID", sql.Int, DocumentID)
+      .input("AuditListID", sql.Int, AuditListID)
+      .input("UID", sql.Int, UID)
+      .input("AuditInstanceID", sql.BigInt, AuditInstanceID)
+      .input("Result", sql.Int, Result)
+      .input("Remark", sql.NVarChar(500), Remark || null)
+      .execute("Tab_Q_UpdateIPQCHistoryCheckpointResult");
+
+    const response = dbResult.recordset[0];
+
+    if (response.Success === 1) {
+      return successResponse(
+        res,
+        response,
+        response.Message
+      );
+    }
+
+    return errorResponse(
+      res,
+      response.Message,
+      400
+    );
+
+  } catch (error) {
+    console.error("Update IPQC History Checkpoint Result Error:", error);
+    return errorResponse(res, error.message, 500);
+  }
+};
 module.exports = {
     getDocListByGroup,
     getScheduleAuditList,
@@ -445,6 +502,6 @@ module.exports = {
     getExecutedIPQCAuditList,
     getExecutedIPQCAuditPoints,
     getPendingIPQCAuditApproval,
-    approveIPQCAudit
-
+    approveIPQCAudit,
+    updateIPQCHistoryCheckpointResult
 };    
