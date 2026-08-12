@@ -7,14 +7,12 @@ const IQCHome = require("../controllers/TabAPI/Operator/IQC/IQCHome");
 
 //IQC Tab Screen
 router.get("/getAuditListByGroup", IQCHome.getAuditListByGroup);
-router.get("/getAuditListAndParts", IQCHome.getAuditListAndParts);
-router.get("/getActiveAuditListIds",IQCHome.getActiveAuditListIds);
-router.post("/executeIQCAudit", IQCHome.executeIQCAudit);
-router.post("/getIQCExecutionCheckpoints", IQCHome.getIQCExecutionCheckpoints);
-router.post("/saveIQCCheckpointResult", IQCHome.saveIQCCheckpointResult);
-router.post("/submitIQCAudit", IQCHome.submitIQCAudit);
-router.post("/getExecutedIQCAuditList", IQCHome.getExecutedIQCAuditList);
-router.post("/getExecutedIQCCheckpointDetails", IQCHome.getExecutedIQCCheckpointDetails);
-router.post("/getPendingIQCAuditApproval", IQCHome.getPendingIQCAuditApproval);
+router.get("/getPlannedIQCAuditList", IQCHome.getPlannedIQCAuditList);
+router.get("/getWaitingForApprovalIQCAuditHistory", IQCHome.getWaitingForApprovalIQCAuditHistory);
+router.get("/getExecutedIQCCheckpoint", IQCHome.getExecutedIQCCheckpoint);
+router.get("/getApprovedIQCAuditHistory", IQCHome.getApprovedIQCAuditHistory);
+router.get("/getIQCCheckpointDetails", IQCHome.getIQCCheckpointDetails);
+router.put("/updateIQCCheckpointResult", IQCHome.updateIQCCheckpointResult);
 router.post("/approveIQCAudit", IQCHome.approveIQCAudit);
+
 module.exports = router;
