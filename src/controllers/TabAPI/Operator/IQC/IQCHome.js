@@ -74,30 +74,23 @@ const getPlannedIQCAuditList = async (req, res) => {
 // Get Waiting for Approval IQC Audit History acc to AuditListID, AuditInstanceID, PartID
 const getWaitingForApprovalIQCAuditHistory = async (req, res) => {
   try {
-    const {
-      partId,
-      auditListId,
-      auditInstanceId
-    } = req.query;
+    const { documentId } = req.query;
+
+    // Validate DocumentID
+    if (!documentId) {
+      return errorResponse(
+        res,
+        "DocumentID is required",
+        400
+      );
+    }
 
     const request = new sql.Request();
 
     request.input(
-      "PartID",
+      "DocumentID",
       sql.Int,
-      partId ? parseInt(partId) : null
-    );
-
-    request.input(
-      "AuditListID",
-      sql.Int,
-      auditListId ? parseInt(auditListId) : null
-    );
-
-    request.input(
-      "AuditInstanceID",
-      sql.BigInt,
-      auditInstanceId ? parseInt(auditInstanceId) : null
+      parseInt(documentId)
     );
 
     const result = await request.execute(
@@ -112,7 +105,7 @@ const getWaitingForApprovalIQCAuditHistory = async (req, res) => {
 
   } catch (error) {
     console.error(
-      "Error fetching approved IQC audit history:",
+      "Error fetching waiting for approval IQC audit history:",
       error
     );
 
@@ -239,32 +232,26 @@ const getExecutedIQCCheckpoint = async (req, res) => {
 };
 
 // Get Approved IQC Audit History acc to AuditListID, AuditInstanceID, PartID
+// Get Approved IQC Audit History according to DocumentID
 const getApprovedIQCAuditHistory = async (req, res) => {
   try {
-    const {
-      partId,
-      auditListId,
-      auditInstanceId
-    } = req.query;
+    const { documentId } = req.query;
+
+    // Validate DocumentID
+    if (!documentId) {
+      return errorResponse(
+        res,
+        "DocumentID is required",
+        400
+      );
+    }
 
     const request = new sql.Request();
 
     request.input(
-      "PartID",
-      sql.VarChar(50),
-      PartID ? PartID : null
-    );
-
-    request.input(
-      "AuditListID",
+      "DocumentID",
       sql.Int,
-      auditListId ? parseInt(auditListId) : null
-    );
-
-    request.input(
-      "AuditInstanceID",
-      sql.BigInt,
-      auditInstanceId ? parseInt(auditInstanceId) : null
+      parseInt(documentId)
     );
 
     const result = await request.execute(
