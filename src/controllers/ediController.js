@@ -174,7 +174,6 @@ const confirmIQC = async (req, res) => {
     }
 };
 
-
 const sampleCollection = async (req, res) => {
     try {
 
@@ -308,6 +307,79 @@ const getGapMaterials = async (req, res) => {
     }
 };
 
+const getHoldMaterialList = async (req, res) => {
+    try {
+
+        const data = await ediService.getHoldMaterialList();
+
+        return successResponse(
+            res,
+            data,
+            "Hold Material List Fetched Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+const confirmHoldMaterial = async (req, res) => {
+    try {
+
+        const {
+            EDINumber,
+            PartID,
+            HoldOk,
+            HoldRejected,
+            LastUpdatedBy
+        } = req.body;
+
+        if (!EDINumber || !PartID) {
+            return errorResponse(
+                res,
+                "EDINumber and PartID are required"
+            );
+        }
+
+        if (
+            HoldOk === undefined ||
+            HoldRejected === undefined
+        ) {
+            return errorResponse(
+                res,
+                "HoldOk and HoldRejected are required"
+            );
+        }
+
+        const data = await ediService.confirmHoldMaterial({
+            EDINumber,
+            PartID,
+            HoldOk,
+            HoldRejected,
+            LastUpdatedBy: req.user?.UserID || null
+        });
+
+        return successResponse(
+            res,
+            data,
+            "Hold Material Confirmed Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
 
 module.exports = {
     getEDIList,
@@ -322,5 +394,7 @@ module.exports = {
     iqcCleared,
     getIQCClearedList,
     getGapMaterials,
-    iqcFailed
+    iqcFailed,
+    getHoldMaterialList,
+    confirmHoldMaterial
 };

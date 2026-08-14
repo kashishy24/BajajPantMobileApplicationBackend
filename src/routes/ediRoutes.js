@@ -73,5 +73,14 @@ router.post(
     ediController.iqcFailed
 );
 
+router.get(
+    "/hold-materials",
+    ediController.getHoldMaterialList
+);
+
+router.post(
+    "/confirm-hold-material",
+    ediController.confirmHoldMaterial
+);
 
 module.exports = router;

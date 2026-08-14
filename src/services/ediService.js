@@ -233,6 +233,30 @@ const getGapMaterials = async () => {
 
 };
 
+const getHoldMaterialList = async () => {
+
+    return await ediRepository.getHoldMaterialList();
+
+};
+
+const confirmHoldMaterial = async ({
+    EDINumber,
+    PartID,
+    HoldOk,
+    HoldRejected,
+    LastUpdatedBy
+}) => {
+
+    return await ediRepository.confirmHoldMaterial({
+        EDINumber,
+        PartID,
+        HoldOk,
+        HoldRejected,
+        LastUpdatedBy
+    });
+
+};
+
 module.exports = {
     getEDIList,
     getEDIDetails,
@@ -246,5 +270,7 @@ module.exports = {
     iqcCleared,
     iqcFailed,
     getIQCClearedList,
-    getGapMaterials
+    getGapMaterials,
+    getHoldMaterialList,
+    confirmHoldMaterial
 };
