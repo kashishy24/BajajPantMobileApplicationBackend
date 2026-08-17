@@ -13,6 +13,7 @@ router.get("/getExecutedIQCCheckpoint", IQCHome.getExecutedIQCCheckpoint);
 router.get("/getApprovedIQCAuditHistory", IQCHome.getApprovedIQCAuditHistory);
 router.get("/getIQCCheckpointDetails", IQCHome.getIQCCheckpointDetails);
 router.put("/updateIQCCheckpointResult", IQCHome.updateIQCCheckpointResult);
+router.post("/moveToNextSampleLevel", IQCHome.moveToNextSampleLevel);
 router.post("/approveIQCAudit", IQCHome.approveIQCAudit);
 
 module.exports = router;

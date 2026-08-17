@@ -453,6 +453,219 @@ const updateIQCCheckpointResult = async (req, res) => {
     );
   }
 };
+
+
+//Move Next Level API
+
+// Move IQC Audit to Next Sample Level
+const moveToNextSampleLevel = async (req, res) => {
+  try {
+    const {
+      DocumentID,
+      AuditListID,
+      AuditInstanceID,
+      PartID,
+      VendorID,
+      ValidatedBy
+    } = req.body;
+
+    // -----------------------------------------
+    // Validation
+    // -----------------------------------------
+
+    if (
+      DocumentID === undefined ||
+      DocumentID === null ||
+      DocumentID === ""
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "DocumentID is required"
+      });
+    }
+
+    if (
+      AuditListID === undefined ||
+      AuditListID === null ||
+      AuditListID === ""
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "AuditListID is required"
+      });
+    }
+
+    if (
+      AuditInstanceID === undefined ||
+      AuditInstanceID === null ||
+      AuditInstanceID === ""
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "AuditInstanceID is required"
+      });
+    }
+
+    const documentID = parseInt(DocumentID);
+    const auditListID = parseInt(AuditListID);
+    const auditInstanceID = parseInt(AuditInstanceID);
+
+    if (![1, 2].includes(documentID)) {
+      return res.status(400).json({
+        success: false,
+        message: "DocumentID must be 1 or 2"
+      });
+    }
+
+    if (isNaN(auditListID)) {
+      return res.status(400).json({
+        success: false,
+        message: "AuditListID must be a valid integer"
+      });
+    }
+
+    if (isNaN(auditInstanceID)) {
+      return res.status(400).json({
+        success: false,
+        message: "AuditInstanceID must be a valid number"
+      });
+    }
+
+    // PartID is required for Milipore
+    if (
+      documentID === 2 &&
+      (PartID === undefined ||
+        PartID === null ||
+        PartID === "")
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "PartID is required for DocumentID 2"
+      });
+    }
+
+    // -----------------------------------------
+    // SQL Request
+    // -----------------------------------------
+
+    const request = new sql.Request();
+
+    request.input(
+      "DocumentID",
+      sql.Int,
+      documentID
+    );
+
+    request.input(
+      "AuditListID",
+      sql.Int,
+      auditListID
+    );
+
+    request.input(
+      "AuditInstanceID",
+      sql.BigInt,
+      auditInstanceID
+    );
+
+    request.input(
+      "PartID",
+      sql.NVarChar(50),
+      PartID !== undefined &&
+      PartID !== null &&
+      PartID !== ""
+        ? String(PartID)
+        : null
+    );
+
+    request.input(
+      "VendorID",
+      sql.Int,
+      VendorID !== undefined &&
+      VendorID !== null &&
+      VendorID !== ""
+        ? parseInt(VendorID)
+        : null
+    );
+
+    request.input(
+      "ValidatedBy",
+      sql.NVarChar(50),
+      ValidatedBy !== undefined &&
+      ValidatedBy !== null &&
+      ValidatedBy !== ""
+        ? String(ValidatedBy)
+        : null
+    );
+
+    // -----------------------------------------
+    // Execute Stored Procedure
+    // -----------------------------------------
+
+    const result = await request.execute(
+      "Tab_Q_IQC_MoveToNextSampleLevel"
+    );
+
+    const data = result.recordset || [];
+
+    // -----------------------------------------
+    // No response from SP
+    // -----------------------------------------
+
+    if (data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No response received from stored procedure"
+      });
+    }
+
+    // -----------------------------------------
+    // SP Error
+    // -----------------------------------------
+
+    if (data[0].ErrorNumber) {
+      return res.status(400).json({
+        success: false,
+        message: data[0].ErrorMessage,
+        errorNumber: data[0].ErrorNumber,
+        errorLine: data[0].ErrorLine
+      });
+    }
+
+    // -----------------------------------------
+    // Success
+    // -----------------------------------------
+
+    return res.status(200).json({
+      success: true,
+      message: data[0].Message,
+      data: {
+        DocumentID: data[0].DocumentID,
+        AuditListID: data[0].AuditListID,
+        AuditInstanceID: data[0].AuditInstanceID,
+        PreviousLevel: data[0].PreviousLevel,
+        NextLevel: data[0].NextLevel,
+        SampleQty: data[0].SampleQty,
+        StartSampleNo: data[0].StartSampleNo,
+        EndSampleNo: data[0].EndSampleNo
+      }
+    });
+
+  } catch (error) {
+    console.error(
+      "Error in moveToNextSampleLevel API:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message
+    });
+  }
+};
+
+
 //-----------------------Supervisor Login------------------------
 //Approve IQC AuditLIST
 // Approve IQC Audit
@@ -527,5 +740,6 @@ module.exports = {
   getExecutedIQCCheckpoint,
   getIQCCheckpointDetails,
   updateIQCCheckpointResult,
+  moveToNextSampleLevel,
   approveIQCAudit
 };
