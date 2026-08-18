@@ -1785,18 +1785,303 @@ const getSqlType = (value) => {
     return sql.NVarChar;
 };
 
+// const sampleCollection = async (
+//     ediNumber,
+//     partId,
+//     userId
+// ) => {
+
+//     const request = new sql.Request();
+
+//     request.input(
+//         "EDINumber",
+//         sql.NVarChar,
+//         ediNumber
+//     );
+
+//     request.input(
+//         "PartID",
+//         sql.NVarChar,
+//         partId
+//     );
+
+//     const fetchRequest = new sql.Request();
+
+//     fetchRequest.input("EDINumber", sql.NVarChar, ediNumber);
+//     fetchRequest.input("PartID", sql.NVarChar, partId);
+    
+//     const existing = await fetchRequest.query(`
+//         SELECT UID
+//         FROM Material_Receiving
+//         WHERE
+//             EDINumber = @EDINumber
+//             AND PartID = @PartID
+//     `);
+    
+//     if (existing.recordset.length === 0) {
+//         throw new Error("Record not found");
+//     }
+
+//     const userResult = await new sql.Request()
+//     .input("UserName", sql.NVarChar, userId)
+//     .query(`
+//         SELECT UserID
+//         FROM Config_User
+//         WHERE UserName = @UserName
+//     `);
+    
+//     if (userResult.recordset.length === 0) {
+//         throw new Error("User not found");
+//     }
+    
+//     const validatedBy = userResult.recordset[0].UserID;
+    
+//     request.input(
+//     "ValidatedBy",
+//     sql.NVarChar, // or sql.Int if the column is INT
+//     validatedBy
+//     );
+
+//     const materialReceivingUID = existing.recordset[0].UID;
+
+//     const result = await request.query(`
+//         UPDATE Material_Receiving
+//         SET Status = 6,
+//         ValidatedBy = @validatedBy,
+//         SampleQty = 5,
+//         SampleLevel = 1,
+//         TimeStamp = GETDATE()
+//         WHERE
+//             EDINumber = @EDINumber
+//             AND PartID = @PartID
+//     `);
+
+//     // Insert into Geneology
+//     const genealogyRequest = new sql.Request();
+
+//     genealogyRequest.input("EDINumber", sql.NVarChar, ediNumber);
+//     genealogyRequest.input("PartID", sql.NVarChar, partId);
+//     genealogyRequest.input("Status", sql.Int, 6);
+//     genealogyRequest.input("LastUpdatedBy", sql.NVarChar, validatedBy);
+
+//     await genealogyRequest.query(`
+//         INSERT INTO Material_Receiving_Geneology
+//         (
+//             EDINumber,
+//             PartID,
+//             Status,
+//             LastUpdatedBy,
+//             LastUpdatedTime
+//         )
+//         VALUES
+//         (
+//             @EDINumber,
+//             @PartID,
+//             @Status,
+//             @LastUpdatedBy,
+//             GETDATE()
+//         )
+//     `);
+
+//     //==================================================
+//     // Move Checkpoints to Execute Checkpoint Table
+//     //==================================================
+    
+//     // Get all Execute IQC Audit Lists for this Part
+//     const executeAuditRequest = new sql.Request();
+
+//     executeAuditRequest.input(
+//         "EDINumber",
+//         sql.NVarChar,
+//         ediNumber
+//     );
+    
+//     executeAuditRequest.input(
+//         "PartID",
+//         sql.NVarChar,
+//         partId
+//     );
+    
+//     const executeAuditResult = await executeAuditRequest.query(`
+//         SELECT
+//             UID,
+//             AuditListID,
+//             PartID,
+//             BatchID,
+//             AuditInstanceID,
+//             Status
+//         FROM QA_Execute_IQC_AuditList
+//         WHERE
+//             PartID = @PartID
+//             AND BatchID = (
+//                 SELECT BatchID
+//                 FROM Material_Receiving
+//                 WHERE
+//                     EDINumber = @EDINumber
+//                     AND PartID = @PartID
+//             )
+//     `);
+    
+//     for (const executeAudit of executeAuditResult.recordset) {
+    
+//         const auditListID = executeAudit.AuditListID;
+    
+//         // Get checkpoint table for this AuditListID
+//         const checkpointTable =
+//             checkpointTableMap[auditListID];
+    
+//         if (!checkpointTable) {
+//             throw new Error(
+//                 `Checkpoint table not configured for AuditListID ${auditListID}`
+//             );
+//         }
+    
+//         //==================================================
+//         // Fetch Checkpoints
+//         //==================================================
+    
+//         const checkpointRequest = new sql.Request();
+    
+//         checkpointRequest.input(
+//             "AuditListID",
+//             sql.Int,
+//             auditListID
+//         );
+    
+//         const checkpointResult =
+//             await checkpointRequest.query(`
+//                 SELECT
+//                     AuditPointID
+//                 FROM ${checkpointTable}
+//                 WHERE
+//                     AuditListID = @AuditListID
+//             `);
+    
+//         //==================================================
+//         // Insert Checkpoints into Execute Table
+//         //==================================================
+    
+//         for (const executeAudit of executeAuditResult.recordset) {
+        
+//             const auditListID = executeAudit.AuditListID;
+        
+//             const mapping = checkpointMapping[auditListID];
+        
+//             if (!mapping) {
+//                 throw new Error(
+//                     `Checkpoint mapping not found for AuditListID ${auditListID}`
+//                 );
+//             }
+        
+//             const configTable = mapping.configTable;
+//             const executeTable = mapping.executeTable;
+        
+//             // 1. Get checkpoints from corresponding CONFIG table
+//             const checkpointResult = await new sql.Request()
+//                 .query(`
+//                     SELECT *
+//                     FROM ${configTable}
+//                 `);
+        
+//             // 2. Insert them into corresponding EXECUTE table
+//             for (const checkpoint of checkpointResult.recordset) {
+        
+//                 // INSERT according to your actual schemas
+//                 await new sql.Request()
+//                     .query(`
+//                         INSERT INTO ${executeTable}
+//                         (...)
+//                         VALUES (...)
+//                     `);
+//             }
+//         }
+//     }
+
+//     return {
+//         rowsAffected: result.rowsAffected[0]
+//     };
+
+// };
+
 const sampleCollection = async (
-    ediNumber,
+    batchId,
     partId,
     userId
 ) => {
 
+    // ==================================================
+    // 1. Find Material Receiving record
+    // ==================================================
+
+    const fetchRequest = new sql.Request();
+
+    fetchRequest.input(
+        "BatchID",
+        sql.NVarChar,
+        batchId
+    );
+
+    fetchRequest.input(
+        "PartID",
+        sql.NVarChar,
+        partId
+    );
+
+    const existing = await fetchRequest.query(`
+        SELECT
+            UID,
+            EDINumber,
+            BatchID,
+            PartID
+        FROM Material_Receiving
+        WHERE
+            BatchID = @BatchID
+            AND PartID = @PartID
+    `);
+
+    if (existing.recordset.length === 0) {
+        throw new Error("Material receiving record not found");
+    }
+
+    const materialReceiving = existing.recordset[0];
+
+    const materialReceivingUID = materialReceiving.UID;
+    const ediNumber = materialReceiving.EDINumber;
+
+
+    // ==================================================
+    // 2. Get User
+    // ==================================================
+
+    const userResult = await new sql.Request()
+        .input(
+            "UserName",
+            sql.NVarChar,
+            userId
+        )
+        .query(`
+            SELECT UserID
+            FROM Config_User
+            WHERE UserName = @UserName
+        `);
+
+    if (userResult.recordset.length === 0) {
+        throw new Error("User not found");
+    }
+
+    const validatedBy = userResult.recordset[0].UserID;
+
+
+    // ==================================================
+    // 3. Update Material Receiving
+    // ==================================================
+
     const request = new sql.Request();
 
     request.input(
-        "EDINumber",
+        "BatchID",
         sql.NVarChar,
-        ediNumber
+        batchId
     );
 
     request.input(
@@ -1805,64 +2090,55 @@ const sampleCollection = async (
         partId
     );
 
-    const fetchRequest = new sql.Request();
-
-    fetchRequest.input("EDINumber", sql.NVarChar, ediNumber);
-    fetchRequest.input("PartID", sql.NVarChar, partId);
-    
-    const existing = await fetchRequest.query(`
-        SELECT UID
-        FROM Material_Receiving
-        WHERE
-            EDINumber = @EDINumber
-            AND PartID = @PartID
-    `);
-    
-    if (existing.recordset.length === 0) {
-        throw new Error("Record not found");
-    }
-
-    const userResult = await new sql.Request()
-    .input("UserName", sql.NVarChar, userId)
-    .query(`
-        SELECT UserID
-        FROM Config_User
-        WHERE UserName = @UserName
-    `);
-    
-    if (userResult.recordset.length === 0) {
-        throw new Error("User not found");
-    }
-    
-    const validatedBy = userResult.recordset[0].UserID;
-    
     request.input(
-    "ValidatedBy",
-    sql.NVarChar, // or sql.Int if the column is INT
-    validatedBy
+        "ValidatedBy",
+        sql.NVarChar,
+        validatedBy
     );
-
-    const materialReceivingUID = existing.recordset[0].UID;
 
     const result = await request.query(`
         UPDATE Material_Receiving
-        SET Status = 6,
-        ValidatedBy = @validatedBy,
-        SampleQty = 5,
-        SampleLevel = 1,
-        TimeStamp = GETDATE()
+        SET
+            Status = 6,
+            ValidatedBy = @ValidatedBy,
+            SampleQty = 5,
+            SampleLevel = 1,
+            TimeStamp = GETDATE()
         WHERE
-            EDINumber = @EDINumber
+            BatchID = @BatchID
             AND PartID = @PartID
     `);
 
-    // Insert into Geneology
+
+    // ==================================================
+    // 4. Insert into Geneology
+    // ==================================================
+
     const genealogyRequest = new sql.Request();
 
-    genealogyRequest.input("EDINumber", sql.NVarChar, ediNumber);
-    genealogyRequest.input("PartID", sql.NVarChar, partId);
-    genealogyRequest.input("Status", sql.Int, 6);
-    genealogyRequest.input("LastUpdatedBy", sql.NVarChar, validatedBy);
+    genealogyRequest.input(
+        "EDINumber",
+        sql.NVarChar,
+        ediNumber
+    );
+
+    genealogyRequest.input(
+        "PartID",
+        sql.NVarChar,
+        partId
+    );
+
+    genealogyRequest.input(
+        "Status",
+        sql.Int,
+        6
+    );
+
+    genealogyRequest.input(
+        "LastUpdatedBy",
+        sql.NVarChar,
+        validatedBy
+    );
 
     await genealogyRequest.query(`
         INSERT INTO Material_Receiving_Geneology
@@ -1883,118 +2159,533 @@ const sampleCollection = async (
         )
     `);
 
-    //==================================================
-    // Move Checkpoints to Execute Checkpoint Table
-    //==================================================
-    
-    // Get all Execute IQC Audit Lists for this Part
+
+    // ==================================================
+    // 5. Get Execute IQC Audit Lists
+    // ==================================================
+
     const executeAuditRequest = new sql.Request();
-    
+
+    executeAuditRequest.input(
+        "BatchID",
+        sql.NVarChar,
+        batchId
+    );
+
     executeAuditRequest.input(
         "PartID",
         sql.NVarChar,
         partId
     );
-    
-    const executeAuditResult = await executeAuditRequest.query(`
-        SELECT
-            UID,
-            AuditListID,
-            PartID,
-            BatchID,
-            AuditInstanceID,
-            Status
-        FROM QA_Execute_IQC_AuditList
-        WHERE
-            PartID = @PartID
-            AND BatchID = (
-                SELECT BatchID
-                FROM Material_Receiving
-                WHERE
-                    EDINumber = @EDINumber
-                    AND PartID = @PartID
-            )
-    `);
-    
+
+    const executeAuditResult =
+        await executeAuditRequest.query(`
+            SELECT
+                UID,
+                AuditListID,
+                PartID,
+                BatchID,
+                AuditInstanceID,
+                Status
+            FROM QA_Execute_IQC_AuditList
+            WHERE
+                PartID = @PartID
+                AND BatchID = @BatchID
+        `);
+
+
+    // ==================================================
+    // 6. Process Each Audit List
+    // ==================================================
+
     for (const executeAudit of executeAuditResult.recordset) {
-    
+
         const auditListID = executeAudit.AuditListID;
-    
-        // Get checkpoint table for this AuditListID
-        const checkpointTable =
-            checkpointTableMap[auditListID];
-    
-        if (!checkpointTable) {
+
+        // ----------------------------------------------
+        // Get mapping
+        // ----------------------------------------------
+
+        const mapping = checkpointMapping[auditListID];
+
+        if (!mapping) {
             throw new Error(
-                `Checkpoint table not configured for AuditListID ${auditListID}`
+                `Checkpoint mapping not found for AuditListID ${auditListID}`
             );
         }
-    
-        //==================================================
-        // Fetch Checkpoints
-        //==================================================
-    
+
+        const configTable = mapping.configTable;
+        const executeTable = mapping.executeTable;
+
+
+        // ----------------------------------------------
+        // Get checkpoints
+        // ----------------------------------------------
+
         const checkpointRequest = new sql.Request();
-    
+
         checkpointRequest.input(
             "AuditListID",
             sql.Int,
             auditListID
         );
-    
+
         const checkpointResult =
             await checkpointRequest.query(`
-                SELECT
-                    AuditPointID
-                FROM ${checkpointTable}
-                WHERE
-                    AuditListID = @AuditListID
+                SELECT *
+                FROM ${configTable}
+                WHERE AuditListID = @AuditListID
             `);
+
+        console.log(
+            `AuditListID ${auditListID} checkpoints:`,
+            checkpointResult.recordset
+        );
+         const checkpoints = checkpointResult.recordset;
+
+    if (checkpoints.length === 0) {
+        continue;
+    }
+    // --------------------------------------------------
+    // 2. Get columns of EXECUTE table
+    // --------------------------------------------------
     
-        //==================================================
-        // Insert Checkpoints into Execute Table
-        //==================================================
+    const columnResult = await new sql.Request()
+        .input(
+            "TableName",
+            sql.NVarChar,
+            executeTable
+        )
+        .query(`
+            SELECT
+                c.COLUMN_NAME,
+                COLUMNPROPERTY(
+                    OBJECT_ID(
+                        c.TABLE_SCHEMA + '.' + c.TABLE_NAME
+                    ),
+                    c.COLUMN_NAME,
+                    'IsIdentity'
+                ) AS IsIdentity
+            FROM INFORMATION_SCHEMA.COLUMNS c
+            WHERE
+                c.TABLE_NAME = @TableName
+            ORDER BY
+                c.ORDINAL_POSITION
+        `);
     
-        for (const executeAudit of executeAuditResult.recordset) {
-        
-            const auditListID = executeAudit.AuditListID;
-        
-            const mapping = checkpointMapping[auditListID];
-        
-            if (!mapping) {
-                throw new Error(
-                    `Checkpoint mapping not found for AuditListID ${auditListID}`
-                );
+    
+    // --------------------------------------------------
+    // 3. Get INSERTABLE columns
+    // --------------------------------------------------
+    
+    // Remove only auto-increment / IDENTITY columns
+    const executeColumns = columnResult.recordset
+        .filter(column => column.IsIdentity !== 1)
+        .map(column => column.COLUMN_NAME);
+    
+    
+    // --------------------------------------------------
+    // 4. Find common columns
+    // --------------------------------------------------
+    
+    // const configColumns = Object.keys(checkpoints[0]);
+    
+    // const commonColumns = configColumns.filter(
+    //     column => executeColumns.includes(column)
+    // );
+    
+    // if (commonColumns.length === 0) {
+    //     throw new Error(
+    //         `No common columns found between ${configTable} and ${executeTable}`
+    //     );
+    // }
+    
+    // console.log(
+    //     `Common insertable columns for ${configTable} → ${executeTable}:`,
+    //     commonColumns
+    // );
+
+    // // --------------------------------------------------
+    // // 4. Insert each checkpoint
+    // // --------------------------------------------------
+
+    // for (const checkpoint of checkpoints) {
+
+    //     const request = new sql.Request();
+
+    //     const columnNames = commonColumns
+    //         .map(column => `[${column}]`)
+    //         .join(", ");
+
+    //     const parameterNames = commonColumns
+    //         .map((column, index) => `@value${index}`)
+    //         .join(", ");
+
+    //     commonColumns.forEach((column, index) => {
+
+    //         const value = checkpoint[column];
+
+    //         let sqlType;
+
+    //         if (typeof value === "number") {
+    //             sqlType = Number.isInteger(value)
+    //                 ? sql.Int
+    //                 : sql.Decimal(18, 4);
+    //         }
+    //         else if (typeof value === "boolean") {
+    //             sqlType = sql.Bit;
+    //         }
+    //         else {
+    //             sqlType = sql.NVarChar(sql.MAX);
+    //         }
+
+    //         request.input(
+    //             `value${index}`,
+    //             sqlType,
+    //             value
+    //         );
+    //     });
+
+    //     await request.query(`
+    //         INSERT INTO ${executeTable}
+    //         (
+    //             ${columnNames}
+    //         )
+    //         VALUES
+    //         (
+    //             ${parameterNames}
+    //         )
+    //     `);
+    // }
+    // --------------------------------------------------
+    // 4. Find common columns - CASE INSENSITIVE
+    // --------------------------------------------------
+    
+    // Config table columns
+    const configColumns = Object.keys(checkpoints[0]);
+    
+    // Create lowercase lookup for execute table columns
+    const executeColumnMap = {};
+    
+    columnResult.recordset
+        .filter(column => column.IsIdentity !== 1)
+        .forEach(column => {
+    
+            executeColumnMap[
+                column.COLUMN_NAME.toLowerCase()
+            ] = column.COLUMN_NAME;
+    
+        });
+
+
+    // --------------------------------------------------
+    // Find common columns
+    // --------------------------------------------------
+    
+    // const commonColumns = [];
+    
+    // for (const configColumn of configColumns) {
+    
+    //     const executeColumn =
+    //         executeColumnMap[configColumn.toLowerCase()];
+    
+    //     if (executeColumn) {
+    
+    //         commonColumns.push({
+    //             configColumn: configColumn,
+    //             executeColumn: executeColumn
+    //         });
+    
+    //     }
+    // }
+    
+    const commonColumns = [];
+
+    for (const configColumn of configColumns) {
+    
+        const executeColumn =
+            executeColumnMap[configColumn.toLowerCase()];
+    
+        if (executeColumn) {
+    
+            // Do NOT map Config AuditPointId
+            // to Execute AuditPointID.
+            //
+            // Execute AuditPointID should receive
+            // Config UID because of the FK.
+    
+            if (
+                configColumn.toLowerCase() === "auditpointid" &&
+                executeColumn.toLowerCase() === "auditpointid"
+            ) {
+                continue;
             }
-        
-            const configTable = mapping.configTable;
-            const executeTable = mapping.executeTable;
-        
-            // 1. Get checkpoints from corresponding CONFIG table
-            const checkpointResult = await new sql.Request()
-                .query(`
-                    SELECT *
-                    FROM ${configTable}
-                `);
-        
-            // 2. Insert them into corresponding EXECUTE table
-            for (const checkpoint of checkpointResult.recordset) {
-        
-                // INSERT according to your actual schemas
-                await new sql.Request()
-                    .query(`
-                        INSERT INTO ${executeTable}
-                        (...)
-                        VALUES (...)
-                    `);
-            }
+    
+            commonColumns.push({
+                configColumn: configColumn,
+                executeColumn: executeColumn
+            });
         }
     }
+    
+    
+    // ----------------------------------------------
+    // Special FK mapping
+    // Config UID → Execute AuditPointID
+    // ----------------------------------------------
+    
+    if (executeColumnMap["auditpointid"]) {
+    
+        commonColumns.push({
+            configColumn: "UID",
+            executeColumn: executeColumnMap["auditpointid"]
+        });
+    
+    }
+    
+    // --------------------------------------------------
+    // Add SampleLevel and SampleNo
+    // --------------------------------------------------
+    
+    const sampleLevelColumn =
+        executeColumnMap["samplelevel"];
+    
+    const sampleNoColumn =
+        executeColumnMap["sampleno"];
+    
+    if (!sampleLevelColumn) {
+        throw new Error(
+            `SampleLevel column not found in execute table ${executeTable}`
+        );
+    }
+    
+    if (!sampleNoColumn) {
+        throw new Error(
+            `SampleNo column not found in execute table ${executeTable}`
+        );
+    }
+    
+    
+    // --------------------------------------------------
+    // Remove columns that should NOT come from config
+    // --------------------------------------------------
+    
+    // These will be handled separately
+    const specialColumns = [
+        "samplelevel",
+        "sampleno"
+    ];
+    
+    const insertColumns = commonColumns.filter(
+        column =>
+            !specialColumns.includes(
+                column.executeColumn.toLowerCase()
+            )
+    );
+    
+    
+    // --------------------------------------------------
+    // Debug
+    // --------------------------------------------------
+    
+    console.log(
+        `Common columns ${configTable} → ${executeTable}:`,
+        insertColumns
+            .map(column => ({
+                config: column.configColumn,
+                execute: column.executeColumn
+            }))
+    );
+    
+    
+    // --------------------------------------------------
+    // 5. Insert each checkpoint 5 times
+    // --------------------------------------------------
+    
+    for (const checkpoint of checkpoints) {
+    
+        // ----------------------------------------------
+        // Sample No 1 → 5
+        // ----------------------------------------------
+    
+        for (let sampleNo = 1; sampleNo <= 5; sampleNo++) {
+    
+            const request = new sql.Request();
+    
+    
+            // ------------------------------------------
+            // Columns
+            // ------------------------------------------
+    
+            const columnNames = [];
+    
+            const parameterNames = [];
+    
+            let parameterIndex = 0;
+    
+    
+            // ------------------------------------------
+            // Common columns
+            // ------------------------------------------
+    
+            for (const column of insertColumns) {
+    
+                columnNames.push(
+                    `[${column.executeColumn}]`
+                );
+    
+                parameterNames.push(
+                    `@value${parameterIndex}`
+                );
+    
+    
+                let value;
+    
+    
+                // --------------------------------------
+                // Values from QA_Execute_IQC_AuditList
+                // --------------------------------------
+    
+                if (
+                    column.configColumn.toLowerCase() ===
+                        "auditlistid" ||
+                    column.configColumn.toLowerCase() ===
+                        "partid" ||
+                    column.configColumn.toLowerCase() ===
+                        "batchid" ||
+                    column.configColumn.toLowerCase() ===
+                        "auditinstanceid"
+                ) {
+    
+                    value = executeAudit[
+                        column.configColumn
+                    ];
+    
+                }
+    
+                // --------------------------------------
+                // Values from CONFIG checkpoint table
+                // --------------------------------------
+    
+                else {
+    
+                    value = checkpoint[
+                        column.configColumn
+                    ];
+    
+                }
+    
+    
+                // --------------------------------------
+                // SQL Type
+                // --------------------------------------
+    
+                let sqlType;
+    
+                if (typeof value === "number") {
+    
+                    sqlType = Number.isInteger(value)
+                        ? sql.Int
+                        : sql.Decimal(18, 4);
+    
+                }
+                else if (typeof value === "boolean") {
+    
+                    sqlType = sql.Bit;
+    
+                }
+                else {
+    
+                    sqlType = sql.NVarChar(sql.MAX);
+    
+                }
+    
+    
+                request.input(
+                    `value${parameterIndex}`,
+                    sqlType,
+                    value
+                );
+    
+                parameterIndex++;
+            }
+    
+    
+            // ------------------------------------------
+            // SampleLevel
+            // ------------------------------------------
+    
+            columnNames.push(
+                `[${sampleLevelColumn}]`
+            );
+    
+            parameterNames.push(
+                `@SampleLevel`
+            );
+    
+            request.input(
+                "SampleLevel",
+                sql.Int,
+                1
+            );
+    
+    
+            // ------------------------------------------
+            // SampleNo
+            // ------------------------------------------
+    
+            columnNames.push(
+                `[${sampleNoColumn}]`
+            );
+    
+            parameterNames.push(
+                `@SampleNo`
+            );
+    
+            request.input(
+                "SampleNo",
+                sql.Int,
+                sampleNo
+            );
+    
+    
+            // ------------------------------------------
+            // INSERT
+            // ------------------------------------------
+    
+            const insertQuery = `
+                INSERT INTO ${executeTable}
+                (
+                    ${columnNames.join(", ")}
+                )
+                VALUES
+                (
+                    ${parameterNames.join(", ")}
+                )
+            `;
+    
+    
+            console.log(
+                `Inserting checkpoint: ${checkpoint.Aspect}, SampleNo: ${sampleNo}`
+            );
+    
+    
+            await request.query(insertQuery);
+        }
+    }
+    }
+
+
+    // ==================================================
+    // 7. Response
+    // ==================================================
 
     return {
-        rowsAffected: result.rowsAffected[0]
+        rowsAffected: result.rowsAffected[0],
+        batchId,
+        partId,
+        ediNumber
     };
-
 };
 
 const getIQCHoldList = async () => {

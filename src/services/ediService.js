@@ -119,13 +119,13 @@ const bypassMaterial = async (data) => {
 const sampleCollection = async (data) => {
 
     const {
-        ediNumber,
+        batchId,
         partId,
         userId
     } = data;
 
-    if (!ediNumber)
-        throw new Error("EDI Number is required");
+    if (!batchId)
+        throw new Error("Batch ID is required");
 
     if (!partId)
         throw new Error("Part ID is required");
@@ -134,7 +134,7 @@ const sampleCollection = async (data) => {
         throw new Error("User ID is required");
 
     return await ediRepository.sampleCollection(
-        ediNumber,
+        batchId,
         partId,
         userId
     );
