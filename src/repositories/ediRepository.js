@@ -3,11 +3,13 @@ const { sql } = require("../config/db");
 const checkpointMapping = {
     1: {
         configTable: "Config_IQC_MiliporeAuditPoint",
-        executeTable: "QA_Execute_IQC_MiliporeAuditPoint"
+        executeTable: "QA_Execute_IQC_MiliporeAuditPoint",
+        historyTable: "QA_Execute_IQC_MiliporeAuditPoint_History"
     },
-    3 : {
+    2 : {
         configTable: "Config_IQC_VisualInspectAuditPoint",
-        executeTable: "QA_Execute_IQC_VisualInspectAuditPoint"
+        executeTable: "QA_Execute_IQC_VisualInspectAuditPoint",
+        historyTable: "QA_Execute_IQC_VisualInspectAuditPoint_History"
     }
 };
 
@@ -89,21 +91,6 @@ const getPartDetails = async (
 
     return result.recordset[0];
 };
-
-const confirmIQC = async (
-    ediNumber,
-    partId,
-    userId
-) => {
-    await createExecuteIQC(
-        ediNumber,
-        partId
-    );
-    return {
-        success: true,
-        message: "IQC confirmed successfully."
-    };
-}
 
 const createExecuteIQC = async (
     ediNumber,
@@ -485,6 +472,20 @@ const createExecuteIQC = async (
 
     return BatchID;
 };
+
+const confirmIQC = async (
+    ediNumber,
+    partId
+) => {
+    await createExecuteIQC(
+        ediNumber,
+        partId
+    );
+    return {
+        success: true,
+        message: "IQC confirmed successfully."
+    };
+}
 
 const validateQuantity = async (
     ediNumber,
@@ -1160,18 +1161,6 @@ const bypassMaterial = async (
 
     fetchRequest.input("EDINumber", sql.NVarChar, ediNumber);
     fetchRequest.input("PartID", sql.NVarChar, partId);
-    
-    // const existing = await fetchRequest.query(`
-    //     SELECT UID
-    //     FROM Material_Receiving
-    //     WHERE
-    //         EDINumber = @EDINumber
-    //         AND PartID = @PartID
-    // `);
-    
-    // if (existing.recordset.length === 0) {
-    //     throw new Error("Record not found");
-    // }
 
     const userResult = await new sql.Request()
     .input("UserName", sql.NVarChar, userId)
@@ -1192,9 +1181,6 @@ const bypassMaterial = async (
     sql.NVarChar, 
     validatedBy
     );
-    
-    // const materialReceivingUID = existing.recordset[0].UID;
-
 
     const result = await request.query(`
         UPDATE Material_Receiving
@@ -1260,11 +1246,6 @@ const bypassMaterial = async (
         ValidatedQty
     } = batchResult.recordset[0];
 
-
-
-
-
-
     //==================================================
     // Check Execute Audit for Batch
     //==================================================
@@ -1302,12 +1283,6 @@ const bypassMaterial = async (
         //------------------------------------------------
         // Create Execute Document + Audit
         //------------------------------------------------
-    
-        // await confirmIQC(
-        //     ediNumber,
-        //     partId,
-        //     userId
-        // );
 
         await createExecuteIQC(
             ediNumber,
@@ -1332,10 +1307,6 @@ const bypassMaterial = async (
             `);
     
     }
-
-
-
-
 
     const insertBatchRequest = new sql.Request();
 
@@ -1512,262 +1483,6 @@ function getCurrentShiftDetails() {
     };
 }
 
-const moveCheckpointsToExecution = async (
-    transaction,
-    auditListID,
-    auditInstanceID
-) => {
-
-    const table = checkpointTableMap[auditListID];
-
-    if (!table) {
-        throw new Error(
-            `Checkpoint table mapping not found for AuditListID ${auditListID}`
-        );
-    }
-
-
-    //==================================================
-    // STEP 1: Get common columns
-    //==================================================
-
-    const columnRequest = new sql.Request(transaction);
-
-    columnRequest.input(
-        "ConfigTable",
-        sql.NVarChar,
-        table.configTable
-    );
-
-    columnRequest.input(
-        "ExecuteTable",
-        sql.NVarChar,
-        table.executeTable
-    );
-
-
-    const columnResult = await columnRequest.query(`
-        SELECT
-            c.COLUMN_NAME
-        FROM INFORMATION_SCHEMA.COLUMNS c
-        INNER JOIN INFORMATION_SCHEMA.COLUMNS e
-            ON e.COLUMN_NAME = c.COLUMN_NAME
-        WHERE
-            c.TABLE_NAME = @ConfigTable
-            AND e.TABLE_NAME = @ExecuteTable
-
-            -- Don't copy identity UID
-            AND c.COLUMN_NAME <> 'UID'
-
-            -- These are execution-specific values
-            AND c.COLUMN_NAME NOT IN
-            (
-                'PartScanID',
-                'SampleLevel',
-                'SampleSize',
-                'Result',
-                'Remark',
-                'Timestamp',
-                'AuditInstanceID',
-                'Status'
-            )
-
-        ORDER BY
-            c.ORDINAL_POSITION
-    `);
-
-
-    const commonColumns = columnResult.recordset.map(
-        row => row.COLUMN_NAME
-    );
-
-
-    if (commonColumns.length === 0) {
-        throw new Error(
-            `No common columns found between ${table.configTable} and ${table.executeTable}`
-        );
-    }
-
-
-    //==================================================
-    // STEP 2: Get latest revision for every AuditPoint
-    //==================================================
-
-    const auditPointRequest = new sql.Request(transaction);
-
-    auditPointRequest.input(
-        "AuditListID",
-        sql.Int,
-        auditListID
-    );
-
-
-    const auditPointResult = await auditPointRequest.query(`
-        WITH LatestAuditPoints AS
-        (
-            SELECT
-                CP.*,
-
-                ROW_NUMBER() OVER
-                (
-                    PARTITION BY CP.AuditPointId
-                    ORDER BY CP.Revision DESC
-                ) AS RN
-
-            FROM ${table.configTable} CP
-
-            WHERE
-                CP.AuditListID = @AuditListID
-        )
-
-        SELECT *
-        FROM LatestAuditPoints
-        WHERE RN = 1
-    `);
-
-
-    const auditPoints = auditPointResult.recordset;
-
-
-    if (auditPoints.length === 0) {
-        return {
-            inserted: 0,
-            auditListID,
-            message: "No checkpoints found"
-        };
-    }
-
-
-    //==================================================
-    // STEP 3: Build INSERT column list
-    //==================================================
-
-    const insertColumns = [
-        ...commonColumns,
-        "PartScanID",
-        "SampleLevel",
-        "SampleSize",
-        "AuditInstanceID",
-        "Status"
-    ];
-
-
-    const columnList = insertColumns
-        .map(column => `[${column}]`)
-        .join(", ");
-
-
-    const configColumnList = commonColumns
-        .map(column => `@${column}`)
-        .join(", ");
-
-
-    //==================================================
-    // STEP 4: Insert 5 samples for every checkpoint
-    //==================================================
-
-    let insertedCount = 0;
-
-
-    for (const checkpoint of auditPoints) {
-
-        for (let sampleNo = 1; sampleNo <= 5; sampleNo++) {
-
-            const request = new sql.Request(transaction);
-
-
-            //==========================================
-            // Common Config -> Execution columns
-            //==========================================
-
-            for (const column of commonColumns) {
-
-                const value = checkpoint[column];
-
-                request.input(
-                    column,
-                    getSqlType(value),
-                    value
-                );
-            }
-
-
-            //==========================================
-            // Sample information
-            //==========================================
-
-            request.input(
-                "PartScanID",
-                sql.Int,
-                sampleNo
-            );
-
-            request.input(
-                "SampleLevel",
-                sql.Int,
-                1
-            );
-
-            request.input(
-                "SampleSize",
-                sql.Int,
-                5
-            );
-
-
-            //==========================================
-            // Same AuditInstanceID
-            //==========================================
-
-            request.input(
-                "AuditInstanceID",
-                sql.Int,
-                auditInstanceID
-            );
-
-
-            //==========================================
-            // Initial execution status
-            //==========================================
-
-            request.input(
-                "Status",
-                sql.Int,
-                1
-            );
-
-
-            await request.query(`
-                INSERT INTO ${table.executeTable}
-                (
-                    ${columnList}
-                )
-                VALUES
-                (
-                    ${configColumnList},
-                    @PartScanID,
-                    @SampleLevel,
-                    @SampleSize,
-                    @AuditInstanceID,
-                    @Status
-                )
-            `);
-
-
-            insertedCount++;
-        }
-    }
-
-
-    return {
-        inserted: insertedCount,
-        auditListID,
-        auditInstanceID,
-        checkpoints: auditPoints.length,
-        samplesPerCheckpoint: 5
-    };
-};
-
 const getSqlType = (value) => {
 
     if (value === null || value === undefined) {
@@ -1784,224 +1499,6 @@ const getSqlType = (value) => {
 
     return sql.NVarChar;
 };
-
-// const sampleCollection = async (
-//     ediNumber,
-//     partId,
-//     userId
-// ) => {
-
-//     const request = new sql.Request();
-
-//     request.input(
-//         "EDINumber",
-//         sql.NVarChar,
-//         ediNumber
-//     );
-
-//     request.input(
-//         "PartID",
-//         sql.NVarChar,
-//         partId
-//     );
-
-//     const fetchRequest = new sql.Request();
-
-//     fetchRequest.input("EDINumber", sql.NVarChar, ediNumber);
-//     fetchRequest.input("PartID", sql.NVarChar, partId);
-    
-//     const existing = await fetchRequest.query(`
-//         SELECT UID
-//         FROM Material_Receiving
-//         WHERE
-//             EDINumber = @EDINumber
-//             AND PartID = @PartID
-//     `);
-    
-//     if (existing.recordset.length === 0) {
-//         throw new Error("Record not found");
-//     }
-
-//     const userResult = await new sql.Request()
-//     .input("UserName", sql.NVarChar, userId)
-//     .query(`
-//         SELECT UserID
-//         FROM Config_User
-//         WHERE UserName = @UserName
-//     `);
-    
-//     if (userResult.recordset.length === 0) {
-//         throw new Error("User not found");
-//     }
-    
-//     const validatedBy = userResult.recordset[0].UserID;
-    
-//     request.input(
-//     "ValidatedBy",
-//     sql.NVarChar, // or sql.Int if the column is INT
-//     validatedBy
-//     );
-
-//     const materialReceivingUID = existing.recordset[0].UID;
-
-//     const result = await request.query(`
-//         UPDATE Material_Receiving
-//         SET Status = 6,
-//         ValidatedBy = @validatedBy,
-//         SampleQty = 5,
-//         SampleLevel = 1,
-//         TimeStamp = GETDATE()
-//         WHERE
-//             EDINumber = @EDINumber
-//             AND PartID = @PartID
-//     `);
-
-//     // Insert into Geneology
-//     const genealogyRequest = new sql.Request();
-
-//     genealogyRequest.input("EDINumber", sql.NVarChar, ediNumber);
-//     genealogyRequest.input("PartID", sql.NVarChar, partId);
-//     genealogyRequest.input("Status", sql.Int, 6);
-//     genealogyRequest.input("LastUpdatedBy", sql.NVarChar, validatedBy);
-
-//     await genealogyRequest.query(`
-//         INSERT INTO Material_Receiving_Geneology
-//         (
-//             EDINumber,
-//             PartID,
-//             Status,
-//             LastUpdatedBy,
-//             LastUpdatedTime
-//         )
-//         VALUES
-//         (
-//             @EDINumber,
-//             @PartID,
-//             @Status,
-//             @LastUpdatedBy,
-//             GETDATE()
-//         )
-//     `);
-
-//     //==================================================
-//     // Move Checkpoints to Execute Checkpoint Table
-//     //==================================================
-    
-//     // Get all Execute IQC Audit Lists for this Part
-//     const executeAuditRequest = new sql.Request();
-
-//     executeAuditRequest.input(
-//         "EDINumber",
-//         sql.NVarChar,
-//         ediNumber
-//     );
-    
-//     executeAuditRequest.input(
-//         "PartID",
-//         sql.NVarChar,
-//         partId
-//     );
-    
-//     const executeAuditResult = await executeAuditRequest.query(`
-//         SELECT
-//             UID,
-//             AuditListID,
-//             PartID,
-//             BatchID,
-//             AuditInstanceID,
-//             Status
-//         FROM QA_Execute_IQC_AuditList
-//         WHERE
-//             PartID = @PartID
-//             AND BatchID = (
-//                 SELECT BatchID
-//                 FROM Material_Receiving
-//                 WHERE
-//                     EDINumber = @EDINumber
-//                     AND PartID = @PartID
-//             )
-//     `);
-    
-//     for (const executeAudit of executeAuditResult.recordset) {
-    
-//         const auditListID = executeAudit.AuditListID;
-    
-//         // Get checkpoint table for this AuditListID
-//         const checkpointTable =
-//             checkpointTableMap[auditListID];
-    
-//         if (!checkpointTable) {
-//             throw new Error(
-//                 `Checkpoint table not configured for AuditListID ${auditListID}`
-//             );
-//         }
-    
-//         //==================================================
-//         // Fetch Checkpoints
-//         //==================================================
-    
-//         const checkpointRequest = new sql.Request();
-    
-//         checkpointRequest.input(
-//             "AuditListID",
-//             sql.Int,
-//             auditListID
-//         );
-    
-//         const checkpointResult =
-//             await checkpointRequest.query(`
-//                 SELECT
-//                     AuditPointID
-//                 FROM ${checkpointTable}
-//                 WHERE
-//                     AuditListID = @AuditListID
-//             `);
-    
-//         //==================================================
-//         // Insert Checkpoints into Execute Table
-//         //==================================================
-    
-//         for (const executeAudit of executeAuditResult.recordset) {
-        
-//             const auditListID = executeAudit.AuditListID;
-        
-//             const mapping = checkpointMapping[auditListID];
-        
-//             if (!mapping) {
-//                 throw new Error(
-//                     `Checkpoint mapping not found for AuditListID ${auditListID}`
-//                 );
-//             }
-        
-//             const configTable = mapping.configTable;
-//             const executeTable = mapping.executeTable;
-        
-//             // 1. Get checkpoints from corresponding CONFIG table
-//             const checkpointResult = await new sql.Request()
-//                 .query(`
-//                     SELECT *
-//                     FROM ${configTable}
-//                 `);
-        
-//             // 2. Insert them into corresponding EXECUTE table
-//             for (const checkpoint of checkpointResult.recordset) {
-        
-//                 // INSERT according to your actual schemas
-//                 await new sql.Request()
-//                     .query(`
-//                         INSERT INTO ${executeTable}
-//                         (...)
-//                         VALUES (...)
-//                     `);
-//             }
-//         }
-//     }
-
-//     return {
-//         rowsAffected: result.rowsAffected[0]
-//     };
-
-// };
 
 const sampleCollection = async (
     batchId,
@@ -2179,19 +1676,22 @@ const sampleCollection = async (
     );
 
     const executeAuditResult =
-        await executeAuditRequest.query(`
-            SELECT
-                UID,
-                AuditListID,
-                PartID,
-                BatchID,
-                AuditInstanceID,
-                Status
-            FROM QA_Execute_IQC_AuditList
-            WHERE
-                PartID = @PartID
-                AND BatchID = @BatchID
-        `);
+    await executeAuditRequest.query(`
+        SELECT
+            E.UID,
+            E.AuditListID,
+            E.PartID,
+            E.BatchID,
+            E.AuditInstanceID,
+            E.Status,
+            A.DocumentID
+        FROM QA_Execute_IQC_AuditList E
+        INNER JOIN Config_AuditList A
+            ON E.AuditListID = A.AuditListID
+        WHERE
+            E.PartID = @PartID
+            AND E.BatchID = @BatchID
+    `);
 
 
     // ==================================================
@@ -2200,17 +1700,18 @@ const sampleCollection = async (
 
     for (const executeAudit of executeAuditResult.recordset) {
 
+        const documentID = executeAudit.DocumentID;
         const auditListID = executeAudit.AuditListID;
-
+        const auditInstanceID = executeAudit.AuditInstanceID;
         // ----------------------------------------------
         // Get mapping
         // ----------------------------------------------
 
-        const mapping = checkpointMapping[auditListID];
+        const mapping = checkpointMapping[documentID];
 
         if (!mapping) {
             throw new Error(
-                `Checkpoint mapping not found for AuditListID ${auditListID}`
+                `Checkpoint mapping not found for DocumentID ${documentID}`
             );
         }
 
@@ -2237,10 +1738,10 @@ const sampleCollection = async (
                 WHERE AuditListID = @AuditListID
             `);
 
-        console.log(
-            `AuditListID ${auditListID} checkpoints:`,
-            checkpointResult.recordset
-        );
+        // console.log(
+        //     `AuditListID ${auditListID} checkpoints:`,
+        //     checkpointResult.recordset
+        // );
          const checkpoints = checkpointResult.recordset;
 
     if (checkpoints.length === 0) {
@@ -2273,92 +1774,8 @@ const sampleCollection = async (
                 c.ORDINAL_POSITION
         `);
     
-    
     // --------------------------------------------------
-    // 3. Get INSERTABLE columns
-    // --------------------------------------------------
-    
-    // Remove only auto-increment / IDENTITY columns
-    const executeColumns = columnResult.recordset
-        .filter(column => column.IsIdentity !== 1)
-        .map(column => column.COLUMN_NAME);
-    
-    
-    // --------------------------------------------------
-    // 4. Find common columns
-    // --------------------------------------------------
-    
-    // const configColumns = Object.keys(checkpoints[0]);
-    
-    // const commonColumns = configColumns.filter(
-    //     column => executeColumns.includes(column)
-    // );
-    
-    // if (commonColumns.length === 0) {
-    //     throw new Error(
-    //         `No common columns found between ${configTable} and ${executeTable}`
-    //     );
-    // }
-    
-    // console.log(
-    //     `Common insertable columns for ${configTable} → ${executeTable}:`,
-    //     commonColumns
-    // );
-
-    // // --------------------------------------------------
-    // // 4. Insert each checkpoint
-    // // --------------------------------------------------
-
-    // for (const checkpoint of checkpoints) {
-
-    //     const request = new sql.Request();
-
-    //     const columnNames = commonColumns
-    //         .map(column => `[${column}]`)
-    //         .join(", ");
-
-    //     const parameterNames = commonColumns
-    //         .map((column, index) => `@value${index}`)
-    //         .join(", ");
-
-    //     commonColumns.forEach((column, index) => {
-
-    //         const value = checkpoint[column];
-
-    //         let sqlType;
-
-    //         if (typeof value === "number") {
-    //             sqlType = Number.isInteger(value)
-    //                 ? sql.Int
-    //                 : sql.Decimal(18, 4);
-    //         }
-    //         else if (typeof value === "boolean") {
-    //             sqlType = sql.Bit;
-    //         }
-    //         else {
-    //             sqlType = sql.NVarChar(sql.MAX);
-    //         }
-
-    //         request.input(
-    //             `value${index}`,
-    //             sqlType,
-    //             value
-    //         );
-    //     });
-
-    //     await request.query(`
-    //         INSERT INTO ${executeTable}
-    //         (
-    //             ${columnNames}
-    //         )
-    //         VALUES
-    //         (
-    //             ${parameterNames}
-    //         )
-    //     `);
-    // }
-    // --------------------------------------------------
-    // 4. Find common columns - CASE INSENSITIVE
+    // 3. Find common columns - CASE INSENSITIVE
     // --------------------------------------------------
     
     // Config table columns
@@ -2381,24 +1798,7 @@ const sampleCollection = async (
     // --------------------------------------------------
     // Find common columns
     // --------------------------------------------------
-    
-    // const commonColumns = [];
-    
-    // for (const configColumn of configColumns) {
-    
-    //     const executeColumn =
-    //         executeColumnMap[configColumn.toLowerCase()];
-    
-    //     if (executeColumn) {
-    
-    //         commonColumns.push({
-    //             configColumn: configColumn,
-    //             executeColumn: executeColumn
-    //         });
-    
-    //     }
-    // }
-    
+
     const commonColumns = [];
 
     for (const configColumn of configColumns) {
@@ -2417,6 +1817,14 @@ const sampleCollection = async (
             if (
                 configColumn.toLowerCase() === "auditpointid" &&
                 executeColumn.toLowerCase() === "auditpointid"
+            ) {
+                continue;
+            }
+
+            // AuditInstanceID must come from
+            // QA_Execute_IQC_AuditList
+            if (
+                configColumn.toLowerCase() === "auditinstanceid"
             ) {
                 continue;
             }
@@ -2452,6 +1860,9 @@ const sampleCollection = async (
     
     const sampleNoColumn =
         executeColumnMap["sampleno"];
+
+    const auditInstanceIDColumn =
+    executeColumnMap["auditinstanceid"];
     
     if (!sampleLevelColumn) {
         throw new Error(
@@ -2465,6 +1876,12 @@ const sampleCollection = async (
         );
     }
     
+
+    if (!auditInstanceIDColumn) {
+        throw new Error(
+            `AuditInstanceID column not found in execute table ${executeTable}`
+        );
+    }
     
     // --------------------------------------------------
     // Remove columns that should NOT come from config
@@ -2473,7 +1890,8 @@ const sampleCollection = async (
     // These will be handled separately
     const specialColumns = [
         "samplelevel",
-        "sampleno"
+        "sampleno",
+        "auditinstanceid"
     ];
     
     const insertColumns = commonColumns.filter(
@@ -2499,7 +1917,7 @@ const sampleCollection = async (
     
     
     // --------------------------------------------------
-    // 5. Insert each checkpoint 5 times
+    // 4. Insert each checkpoint 5 times
     // --------------------------------------------------
     
     for (const checkpoint of checkpoints) {
@@ -2552,9 +1970,7 @@ const sampleCollection = async (
                     column.configColumn.toLowerCase() ===
                         "partid" ||
                     column.configColumn.toLowerCase() ===
-                        "batchid" ||
-                    column.configColumn.toLowerCase() ===
-                        "auditinstanceid"
+                        "batchid"
                 ) {
     
                     value = executeAudit[
@@ -2609,6 +2025,24 @@ const sampleCollection = async (
     
                 parameterIndex++;
             }
+
+            // ==================================================
+            // AuditInstanceID
+            // ==================================================
+
+            columnNames.push(
+                `[${auditInstanceIDColumn}]`
+            );
+
+            parameterNames.push(
+                `@AuditInstanceID`
+            );
+
+            request.input(
+                "AuditInstanceID",
+                sql.Int,
+                auditInstanceID
+            );
     
     
             // ------------------------------------------
@@ -2665,9 +2099,13 @@ const sampleCollection = async (
             `;
     
     
-            console.log(
-                `Inserting checkpoint: ${checkpoint.Aspect}, SampleNo: ${sampleNo}`
-            );
+            // console.log(
+            //     `DocumentID: ${documentID}, ` +
+            //     `AuditListID: ${auditListID}, ` +
+            //     `AuditInstanceID: ${auditInstanceID}, ` +
+            //     `Checkpoint: ${checkpoint.Aspect}, ` +
+            //     `SampleNo: ${sampleNo}`
+            // );
     
     
             await request.query(insertQuery);
@@ -2677,7 +2115,7 @@ const sampleCollection = async (
 
 
     // ==================================================
-    // 7. Response
+    // 5. Response
     // ==================================================
 
     return {
@@ -3120,18 +2558,6 @@ const iqcFailed = async (
         ValidatedQty
     } = materialResult.recordset[0];
 
-    // const stockRequest = new sql.Request();
-
-    // stockRequest.input("PartID", sql.NVarChar, partId);
-    // stockRequest.input("RejectedQty", sql.Int, ValidatedQty);
-    
-    // await stockRequest.query(`
-    //     UPDATE Material_Stock
-    //     SET
-    //         StoreQty = StoreQty - @RejectedQty
-    //     WHERE
-    //         PartID = @PartID
-    // `);
 
     const now = new Date();
 
@@ -3512,6 +2938,859 @@ const confirmHoldMaterial = async ({
         throw error;
     }
 };
+
+const confirmAuditList = async (
+    auditListID,
+    auditInstanceID,
+    batchId,
+    userId,
+    remark,
+    holdQty,
+    rejectedQty,
+    okQty,
+    sampleLevel,
+    sampleSize,
+    NokSample
+) => {
+
+    const transaction = new sql.Transaction();
+
+    try {
+
+        await transaction.begin();
+
+
+        // ==================================================
+        // 1. Get User
+        // ==================================================
+
+        const userRequest = new sql.Request(transaction);
+
+        userRequest.input(
+            "UserName",
+            sql.NVarChar,
+            userId
+        );
+
+        const userResult = await userRequest.query(`
+            SELECT UserID
+            FROM Config_User
+            WHERE UserName = @UserName
+        `);
+
+        if (userResult.recordset.length === 0) {
+            throw new Error("User not found");
+        }
+
+        const executedBy = userResult.recordset[0].UserID;
+
+
+        // ==================================================
+        // 2. Get Execute Audit List
+        // ==================================================
+
+        const auditRequest = new sql.Request(transaction);
+
+        auditRequest.input(
+            "AuditListID",
+            sql.Int,
+            auditListID
+        );
+
+        auditRequest.input(
+            "AuditInstanceID",
+            sql.Int,
+            auditInstanceID
+        );
+
+        auditRequest.input(
+            "BatchID",
+            sql.NVarChar,
+            batchId
+        );
+
+        const auditResult = await auditRequest.query(`
+            SELECT
+                UID,
+                AuditListID,
+                PartID,
+                BatchID,
+                AuditInstanceID,
+                Status,
+                SampleLevel,
+                SampleSize,
+                NokSample
+            FROM QA_Execute_IQC_AuditList
+            WHERE
+                AuditListID = @AuditListID
+                AND AuditInstanceID = @AuditInstanceID
+                AND BatchID = @BatchID
+        `);
+
+        if (auditResult.recordset.length === 0) {
+            throw new Error(
+                "IQC Audit List not found"
+            );
+        }
+
+        const audit = auditResult.recordset[0];
+
+        const partId = audit.PartID;
+
+
+        // ==================================================
+        // 3. Calculate Material Receiving Status
+        // ==================================================
+
+        let materialStatus;
+
+
+        if (
+            rejectedQty === 0 &&
+            holdQty === 0
+        ) {
+
+            materialStatus = 9;
+
+        }
+        else if (
+            rejectedQty > 0 &&
+            holdQty > 0
+        ) {
+
+            materialStatus = 7;
+
+        }
+        else if (
+            rejectedQty > 0 &&
+            holdQty === 0
+        ) {
+
+            materialStatus = 7;
+
+        }
+        else if (
+            okQty === 0 &&
+            rejectedQty === 0
+        ) {
+
+            materialStatus = 8;
+
+        }
+        else if (
+            holdQty === 0 &&
+            okQty === 0
+        ) {
+
+            materialStatus = 11;
+
+        }
+        else {
+
+            throw new Error(
+                "Invalid quantity/status combination"
+            );
+        }
+
+
+        // ==================================================
+        // 4. Get Material Receiving
+        // ==================================================
+
+        const receivingRequest =
+            new sql.Request(transaction);
+
+        receivingRequest.input(
+            "BatchID",
+            sql.NVarChar,
+            batchId
+        );
+
+        receivingRequest.input(
+            "PartID",
+            sql.NVarChar,
+            partId
+        );
+
+        const receivingResult =
+            await receivingRequest.query(`
+                SELECT
+                    UID,
+                    EDINumber,
+                    PartID,
+                    BatchID,
+                    VendorID,
+                    IncomingQty,
+                    ValidatedQty
+                FROM Material_Receiving
+                WHERE
+                    BatchID = @BatchID
+                    AND PartID = @PartID
+            `);
+
+        if (receivingResult.recordset.length === 0) {
+            throw new Error(
+                "Material Receiving record not found"
+            );
+        }
+
+        const receiving =
+            receivingResult.recordset[0];
+
+        const ediNumber =
+            receiving.EDINumber;
+
+        const vendorId =
+            receiving.VendorID;
+
+
+        // ==================================================
+        // 5. Update Material Receiving
+        // ==================================================
+
+        const updateReceiving =
+            new sql.Request(transaction);
+
+        updateReceiving.input(
+            "BatchID",
+            sql.NVarChar,
+            batchId
+        );
+
+        updateReceiving.input(
+            "PartID",
+            sql.NVarChar,
+            partId
+        );
+
+        updateReceiving.input(
+            "OKQty",
+            sql.Int,
+            okQty
+        );
+
+        updateReceiving.input(
+            "HoldQty",
+            sql.Int,
+            holdQty
+        );
+
+        updateReceiving.input(
+            "RejectedQty",
+            sql.Int,
+            rejectedQty
+        );
+
+        updateReceiving.input(
+            "SampleLevel",
+            sql.Int,
+            sampleLevel
+        );
+
+        updateReceiving.input(
+            "SampleSize",
+            sql.Int,
+            sampleSize
+        );
+
+        updateReceiving.input(
+            "Status",
+            sql.Int,
+            materialStatus
+        );
+
+        updateReceiving.input(
+            "ValidatedBy",
+            sql.NVarChar,
+            executedBy
+        );
+
+        await updateReceiving.query(`
+            UPDATE Material_Receiving
+            SET
+                OKQty = @OKQty,
+                HoldQty = @HoldQty,
+                RejectedQty = @RejectedQty,
+                SampleLevel = @SampleLevel,
+                SampleSize = @SampleSize,
+                Status = @Status,
+                ValidatedBy = @ValidatedBy,
+                TimeStamp = GETDATE()
+            WHERE
+                BatchID = @BatchID
+                AND PartID = @PartID
+        `);
+
+
+        // ==================================================
+        // 6. Insert Geneology
+        // ==================================================
+
+        const genealogyRequest =
+            new sql.Request(transaction);
+
+        genealogyRequest.input(
+            "EDINumber",
+            sql.NVarChar,
+            ediNumber
+        );
+
+        genealogyRequest.input(
+            "PartID",
+            sql.NVarChar,
+            partId
+        );
+
+        genealogyRequest.input(
+            "Status",
+            sql.Int,
+            materialStatus
+        );
+
+        genealogyRequest.input(
+            "LastUpdatedBy",
+            sql.NVarChar,
+            executedBy
+        );
+
+        genealogyRequest.input(
+            "ValidatedQty",
+            sql.Int,
+            receiving.ValidatedQty
+        );
+        
+        genealogyRequest.input(
+            "HoldQty",
+            sql.Int,
+            holdQty
+        );
+        
+        genealogyRequest.input(
+            "OKQty",
+            sql.Int,
+            okQty
+        );
+        
+        genealogyRequest.input(
+            "RejectedQty",
+            sql.Int,
+            rejectedQty
+        );
+
+        await genealogyRequest.query(`
+            INSERT INTO Material_Receiving_Geneology
+            (
+                EDINumber,
+                PartID,
+                ValidatedQty,
+                HoldQty,
+                OKQty,
+                RejectedQty,
+                Status,
+                LastUpdatedBy,
+                LastUpdatedTime
+            )
+            VALUES
+            (
+                @EDINumber,
+                @PartID,
+                @ValidatedQty,
+                @HoldQty,
+                @OKQty,
+                @RejectedQty,
+                @Status,
+                @LastUpdatedBy,
+                GETDATE()
+            )
+        `);
+
+        // ==================================================
+        // 7. Get DocumentID
+        // ==================================================
+
+        const documentRequest =
+            new sql.Request(transaction);
+
+        documentRequest.input(
+            "AuditListID",
+            sql.Int,
+            auditListID
+        );
+
+        const documentResult =
+            await documentRequest.query(`
+                SELECT DocumentID
+                FROM Config_AuditList
+                WHERE AuditListID = @AuditListID
+            `);
+
+        if (documentResult.recordset.length === 0) {
+            throw new Error(
+                `DocumentID not found for AuditListID ${auditListID}`
+            );
+        }
+
+        const documentID =
+            documentResult.recordset[0].DocumentID;
+
+
+        // ==================================================
+        // 8. Get Table Mapping
+        // ==================================================
+
+        const mapping =
+            checkpointMapping[documentID];
+
+        if (!mapping) {
+            throw new Error(
+                `Checkpoint mapping not found for DocumentID ${documentID}`
+            );
+        }
+
+        const executeTable =
+            mapping.executeTable;
+
+        const historyTable =
+            mapping.historyTable;
+
+        // ==================================================
+        // 9. Move Execute Checkpoints to History
+        // ==================================================
+
+        if (historyTable) {
+
+            const historyRequest =
+                new sql.Request(transaction);
+
+            historyRequest.input(
+                "AuditListID",
+                sql.Int,
+                auditListID
+            );
+
+            historyRequest.input(
+                "AuditInstanceID",
+                sql.Int,
+                auditInstanceID
+            );
+
+            await historyRequest.query(`
+                INSERT INTO ${historyTable}
+                SELECT *
+                FROM ${executeTable}
+                WHERE
+                    AuditListID = @AuditListID
+                    AND AuditInstanceID = @AuditInstanceID
+            `);
+
+
+            const deleteRequest =
+                new sql.Request(transaction);
+
+            deleteRequest.input(
+                "AuditListID",
+                sql.Int,
+                auditListID
+            );
+
+            deleteRequest.input(
+                "AuditInstanceID",
+                sql.Int,
+                auditInstanceID
+            );
+
+            await deleteRequest.query(`
+                DELETE FROM ${executeTable}
+                WHERE
+                    AuditListID = @AuditListID
+                    AND AuditInstanceID = @AuditInstanceID
+            `);
+        }
+
+        // ==================================================
+        // 10. Update Execute IQC Audit List
+        // ==================================================
+
+        const auditStatus =
+            rejectedQty > 0
+                ? 3
+                : 4;
+
+        const updateAuditRequest =
+            new sql.Request(transaction);
+
+        updateAuditRequest.input(
+            "AuditListID",
+            sql.Int,
+            auditListID
+        );
+
+        updateAuditRequest.input(
+            "AuditInstanceID",
+            sql.Int,
+            auditInstanceID
+        );
+
+        updateAuditRequest.input(
+            "BatchID",
+            sql.NVarChar,
+            batchId
+        );
+
+        updateAuditRequest.input(
+            "ExecutedBy",
+            sql.NVarChar,
+            executedBy
+        );
+
+        updateAuditRequest.input(
+            "ExecutedByRemark",
+            sql.NVarChar,
+            remark || null
+        );
+
+        updateAuditRequest.input(
+            "Status",
+            sql.Int,
+            auditStatus
+        );
+
+        updateAuditRequest.input(
+            "NokSample",
+            sql.Int,
+            NokSample
+        );
+
+        updateAuditRequest.input(
+            "SampleLevel",
+            sql.Int,
+            sampleLevel
+        );
+
+        updateAuditRequest.input(
+            "SampleSize",
+            sql.Int,
+            sampleSize
+        );
+
+        await updateAuditRequest.query(`
+            UPDATE QA_Execute_IQC_AuditList
+            SET
+                ExecutionEndTime = GETDATE(),
+                ExecutedBy = @ExecutedBy,
+                ExecutedByRemark = @ExecutedByRemark,
+                Status = @Status,
+                NokSample = @NokSample,
+                SampleLevel = @SampleLevel,
+                SampleSize = @SampleSize
+            WHERE
+                AuditListID = @AuditListID
+                AND AuditInstanceID = @AuditInstanceID
+                AND BatchID = @BatchID
+        `);
+
+        // ==================================================
+        // 11. Move Audit List to History
+        // ==================================================
+
+        const auditHistoryRequest =
+            new sql.Request(transaction);
+
+        auditHistoryRequest.input(
+            "AuditListID",
+            sql.Int,
+            auditListID
+        );
+
+        auditHistoryRequest.input(
+            "AuditInstanceID",
+            sql.Int,
+            auditInstanceID
+        );
+
+        auditHistoryRequest.input(
+            "BatchID",
+            sql.NVarChar,
+            batchId
+        );
+
+        await auditHistoryRequest.query(`
+            INSERT INTO QA_Execute_IQC_AuditList_History
+            SELECT *
+            FROM QA_Execute_IQC_AuditList
+            WHERE
+                AuditListID = @AuditListID
+                AND AuditInstanceID = @AuditInstanceID
+                AND BatchID = @BatchID
+        `);
+
+
+        // Delete active audit list
+
+        const deleteAuditRequest =
+            new sql.Request(transaction);
+
+        deleteAuditRequest.input(
+            "AuditListID",
+            sql.Int,
+            auditListID
+        );
+
+        deleteAuditRequest.input(
+            "AuditInstanceID",
+            sql.Int,
+            auditInstanceID
+        );
+
+        deleteAuditRequest.input(
+            "BatchID",
+            sql.NVarChar,
+            batchId
+        );
+
+        await deleteAuditRequest.query(`
+            DELETE FROM QA_Execute_IQC_AuditList
+            WHERE
+                AuditListID = @AuditListID
+                AND AuditInstanceID = @AuditInstanceID
+                AND BatchID = @BatchID
+        `);
+
+        // ==================================================
+        // 12. Update Material Stock
+        // ==================================================
+
+        const stockRequest =
+            new sql.Request(transaction);
+
+        stockRequest.input(
+            "PartID",
+            sql.NVarChar,
+            partId
+        );
+
+        stockRequest.input(
+            "OKQty",
+            sql.Int,
+            okQty
+        );
+
+        await stockRequest.query(`
+            UPDATE Material_Stock
+            SET
+                IncomingQty =
+                    ISNULL(IncomingQty, 0) - @OKQty,
+
+                StoreQty =
+                    ISNULL(StoreQty, 0) + @OKQty
+            WHERE
+                PartID = @PartID
+        `);
+
+        // ==================================================
+        // 13. Insert Material Batch Wise Qty
+        // ==================================================
+
+        // ==================================================
+        // Get EnginePartID from Config_PartVariant
+        // ==================================================
+        
+        const variantRequest =
+            new sql.Request(transaction);
+        
+        variantRequest.input(
+            "PartID",
+            sql.NVarChar,
+            partId
+        );
+        
+        const variantResult =
+            await variantRequest.query(`
+                SELECT EnginePartID
+                FROM Config_PartVariant
+                WHERE PartID = @PartID
+            `);
+        
+        if (variantResult.recordset.length === 0) {
+            throw new Error(
+                `Part Variant not found for PartID ${partId}`
+            );
+        }
+        
+        const enginePartID =
+            variantResult.recordset[0].EnginePartID;
+
+        const priorityRequest =
+            new sql.Request(transaction);
+
+        priorityRequest.input(
+            "PartID",
+            sql.NVarChar,
+            partId
+        );
+
+        const priorityResult =
+            await priorityRequest.query(`
+                SELECT
+                    ISNULL(MAX(Priority), 0) + 1
+                    AS NextPriority
+                FROM Material_BatchWiseQty
+                WHERE PartID = @PartID
+            `);
+
+        const priority =
+            priorityResult.recordset[0].NextPriority;
+
+
+        const areaRequest =
+            new sql.Request(transaction);
+
+        const areaResult =
+            await areaRequest.query(`
+                SELECT AreaID
+                FROM Config_StorageArea
+                WHERE AreaName = 'Store'
+            `);
+
+        if (areaResult.recordset.length === 0) {
+            throw new Error(
+                "Store Area not found"
+            );
+        }
+
+        const areaID =
+            areaResult.recordset[0].AreaID;
+
+
+        const batchRequest =
+            new sql.Request(transaction);
+
+        batchRequest.input(
+            "PartID",
+            sql.NVarChar,
+            partId
+        );
+
+        batchRequest.input(
+            "VendorID",
+            sql.Int,
+            vendorId
+        );
+
+        batchRequest.input(
+            "AreaID",
+            sql.Int,
+            areaID
+        );
+
+        batchRequest.input(
+            "BatchID",
+            sql.NVarChar,
+            batchId
+        );
+
+        batchRequest.input(
+            "Priority",
+            sql.Int,
+            priority
+        );
+
+        batchRequest.input(
+            "Quantity",
+            sql.Int,
+            okQty
+        );
+
+        batchRequest.input(
+            "Used",
+            sql.Int,
+            0
+        );
+
+        batchRequest.input(
+            "Moved",
+            sql.Int,
+            0
+        );
+
+        batchRequest.input(
+            "Rejected",
+            sql.Int,
+            rejectedQty
+        );
+
+        batchRequest.input(
+            "Status",
+            sql.Int,
+            0
+        );
+
+        batchRequest.input(
+            "EnginePartID",
+            sql.Int,
+            enginePartID
+        );
+
+        await batchRequest.query(`
+            INSERT INTO Material_BatchWiseQty
+            (
+                PartID,
+                EnginePartID,
+                VendorID,
+                AreaID,
+                BatchID,
+                Priority,
+                OpenQty,
+                Used,
+                Moved,
+                Rejected,
+                Status
+            )
+            VALUES
+            (
+                @PartID,
+                @EnginePartID,
+                @VendorID,
+                @AreaID,
+                @BatchID,
+                @Priority,
+                @Quantity,
+                @Used,
+                @Moved,
+                @Rejected,
+                @Status
+            )
+        `);
+
+                await transaction.commit();
+
+        return {
+            success: true,
+            message: "IQC confirmed successfully",
+            auditListID,
+            auditInstanceID,
+            batchId,
+            partId,
+            okQty,
+            holdQty,
+            rejectedQty,
+            status: materialStatus
+        };
+
+            } catch (error) {
+
+        try {
+            await transaction.rollback();
+        } catch (rollbackError) {
+            console.error(
+                "Transaction rollback failed:",
+                rollbackError
+            );
+        }
+
+        throw error;
+    }
+};
     
 module.exports = {
     getEDIList,
@@ -3528,5 +3807,6 @@ module.exports = {
     getGapMaterials,
     iqcFailed,
     getHoldMaterialList,
-    confirmHoldMaterial
+    confirmHoldMaterial,
+    confirmAuditList
 }

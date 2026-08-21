@@ -150,7 +150,6 @@ const bypassMaterial = async (req, res) => {
     }
 };
 
-
 const confirmIQC = async (req, res) => {
     try {
 
@@ -380,6 +379,28 @@ const confirmHoldMaterial = async (req, res) => {
     }
 };
 
+const confirmAuditList = async (req, res) => {
+    try {
+
+        const result = await ediService.confirmAuditList(
+            req.body
+        );
+
+        return successResponse(
+            res,
+            result,
+            "IQC Confirmed Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
 
 module.exports = {
     getEDIList,
@@ -395,6 +416,7 @@ module.exports = {
     getIQCClearedList,
     getGapMaterials,
     iqcFailed,
+    confirmAuditList,
     getHoldMaterialList,
     confirmHoldMaterial
 };
