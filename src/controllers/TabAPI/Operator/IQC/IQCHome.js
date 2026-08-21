@@ -350,84 +350,62 @@ const updateIQCCheckpointResult = async (req, res) => {
   try {
     const {
       DocumentID,
-      AuditListID,
-      AuditPointID,
-      SampleLevel,
-      SampleNo,
-      AuditInstanceID,
+      UID,
       Result,
       Remark,
       ObservationValue
     } = req.body;
+
+    // Validate required fields
+    if (
+      DocumentID === undefined ||
+      DocumentID === null ||
+      UID === undefined ||
+      UID === null ||
+      Result === undefined ||
+      Result === null
+    ) {
+      return errorResponse(
+        res,
+        "DocumentID, UID and Result are required",
+        400
+      );
+    }
 
     const request = new sql.Request();
 
     request.input(
       "DocumentID",
       sql.Int,
-      DocumentID !== undefined && DocumentID !== null
-        ? parseInt(DocumentID)
-        : null
+      parseInt(DocumentID)
     );
 
     request.input(
-      "AuditListID",
+      "UID",
       sql.Int,
-      AuditListID !== undefined && AuditListID !== null
-        ? parseInt(AuditListID)
-        : null
-    );
-
-    request.input(
-      "AuditPointID",
-      sql.Int,
-      AuditPointID !== undefined && AuditPointID !== null
-        ? parseInt(AuditPointID)
-        : null
-    );
-
-    request.input(
-      "SampleLevel",
-      sql.Int,
-      SampleLevel !== undefined && SampleLevel !== null
-        ? parseInt(SampleLevel)
-        : null
-    );
-
-    request.input(
-      "SampleNo",
-      sql.Int,
-      SampleNo !== undefined && SampleNo !== null
-        ? parseInt(SampleNo)
-        : null
-    );
-
-    request.input(
-      "AuditInstanceID",
-      sql.BigInt,
-      AuditInstanceID !== undefined && AuditInstanceID !== null
-        ? parseInt(AuditInstanceID)
-        : null
+      parseInt(UID)
     );
 
     request.input(
       "Result",
       sql.Int,
-      Result !== undefined && Result !== null
-        ? parseInt(Result)
-        : null
+      parseInt(Result)
     );
 
     request.input(
       "Remark",
       sql.NVarChar(500),
-      Remark || null
+      Remark !== undefined && Remark !== null
+        ? Remark
+        : null
     );
 
     request.input(
       "ObservationValue",
       sql.NVarChar(500),
-      ObservationValue || null
+      ObservationValue !== undefined && ObservationValue !== null
+        ? ObservationValue
+        : null
     );
 
     const result = await request.execute(
@@ -453,7 +431,6 @@ const updateIQCCheckpointResult = async (req, res) => {
     );
   }
 };
-
 
 //Move Next Level API
 

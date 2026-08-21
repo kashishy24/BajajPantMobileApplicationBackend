@@ -1,11 +1,11 @@
 const { sql } = require("../config/db");
 
 const checkpointMapping = {
-    1: {
+    11: {
         configTable: "Config_IQC_MiliporeAuditPoint",
         executeTable: "QA_Execute_IQC_MiliporeAuditPoint"
     },
-    3 : {
+    10 : {
         configTable: "Config_IQC_VisualInspectAuditPoint",
         executeTable: "QA_Execute_IQC_VisualInspectAuditPoint"
     }
