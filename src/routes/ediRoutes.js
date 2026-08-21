@@ -39,6 +39,11 @@ router.get(
     ediController.getPartDetails
 );
 
+router.post(
+    "/confirm-audit-list",
+    ediController.confirmAuditList
+);
+
 router.get(
     "/validated",
     ediController.getValidatedMaterials
@@ -82,5 +87,7 @@ router.post(
     "/confirm-hold-material",
     ediController.confirmHoldMaterial
 );
+
+
 
 module.exports = router;

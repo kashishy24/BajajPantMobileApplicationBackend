@@ -40,8 +40,7 @@ const confirmIQC = async (data) => {
 
     const {
         ediNumber,
-        partId,
-        userId
+        partId
     } = data;
 
     if (!ediNumber)
@@ -52,8 +51,7 @@ const confirmIQC = async (data) => {
 
     return await ediRepository.confirmIQC(
         ediNumber,
-        partId,
-        userId
+        partId
     );
 };
 
@@ -257,6 +255,80 @@ const confirmHoldMaterial = async ({
 
 };
 
+const confirmAuditList = async (data) => {
+
+    const {
+        auditListID,
+        auditInstanceID,
+        batchId,
+        userId,
+        remark,
+        holdQty,
+        rejectedQty,
+        okQty,
+        sampleLevel,
+        sampleSize,
+        NokSample
+    } = data;
+
+
+    if (!auditListID) {
+        throw new Error("AuditListID is required");
+    }
+
+    if (!auditInstanceID) {
+        throw new Error("AuditInstanceID is required");
+    }
+
+    if (!batchId) {
+        throw new Error("Batch ID is required");
+    }
+
+    if (!userId) {
+        throw new Error("User ID is required");
+    }
+
+
+    if (holdQty === undefined || holdQty === null) {
+        throw new Error("Hold Qty is required");
+    }
+
+    if (rejectedQty === undefined || rejectedQty === null) {
+        throw new Error("Rejected Qty is required");
+    }
+
+    if (okQty === undefined || okQty === null) {
+        throw new Error("OK Qty is required");
+    }
+
+    if (!sampleLevel) {
+        throw new Error("Sample Level is required");
+    }
+
+    if (!sampleSize) {
+        throw new Error("Sample Size is required");
+    }
+
+    if (NokSample === undefined || NokSample === null) {
+        throw new Error("Nok Sample is required");
+    }
+
+
+    return await ediRepository.confirmIQC(
+        auditListID,
+        auditInstanceID,
+        batchId,
+        userId,
+        remark,
+        holdQty,
+        rejectedQty,
+        okQty,
+        sampleLevel,
+        sampleSize,
+        NokSample
+    );
+};
+
 module.exports = {
     getEDIList,
     getEDIDetails,
@@ -272,5 +344,6 @@ module.exports = {
     getIQCClearedList,
     getGapMaterials,
     getHoldMaterialList,
-    confirmHoldMaterial
+    confirmHoldMaterial,
+    confirmAuditList
 };
