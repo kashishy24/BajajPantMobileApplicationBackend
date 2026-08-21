@@ -1693,6 +1693,41 @@ const sampleCollection = async (
             AND E.BatchID = @BatchID
     `);
 
+    // ==================================================
+    // 5.1 Update QA Execute IQC Audit List
+    // ==================================================
+    
+    const updateAuditRequest = new sql.Request();
+    
+    updateAuditRequest.input(
+        "BatchID",
+        sql.NVarChar,
+        batchId
+    );
+    
+    updateAuditRequest.input(
+        "PartID",
+        sql.NVarChar,
+        partId
+    );
+    
+    updateAuditRequest.input(
+        "ExecutedBy",
+        sql.NVarChar,
+        validatedBy
+    );
+    
+    await updateAuditRequest.query(`
+        UPDATE QA_Execute_IQC_AuditList
+        SET
+            ExecutionStartTime = GETDATE(),
+            ExecutedBy = @ExecutedBy,
+            Status = 2
+        WHERE
+            PartID = @PartID
+            AND BatchID = @BatchID
+    `);
+
 
     // ==================================================
     // 6. Process Each Audit List
