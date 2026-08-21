@@ -1,12 +1,12 @@
 const { sql } = require("../config/db");
 
 const checkpointMapping = {
-    1: {
+    4: {
         configTable: "Config_IQC_MiliporeAuditPoint",
         executeTable: "QA_Execute_IQC_MiliporeAuditPoint",
         historyTable: "QA_Execute_IQC_MiliporeAuditPoint_History"
     },
-    2 : {
+    4 : {
         configTable: "Config_IQC_VisualInspectAuditPoint",
         executeTable: "QA_Execute_IQC_VisualInspectAuditPoint",
         historyTable: "QA_Execute_IQC_VisualInspectAuditPoint_History"
@@ -352,6 +352,31 @@ const createExecuteIQC = async (
             // Insert Execute IQC Audit
             // ----------------------------------------------------
 
+            // ----------------------------------------------------
+            // Get Production Shift from ApplicationsSetting
+            // ----------------------------------------------------
+            
+            const shiftResult = await new sql.Request()
+                .input(
+                    "ParameterName",
+                    sql.NVarChar,
+                    "ProdShift"
+                )
+                .query(`
+                    SELECT ParameterValue
+                    FROM ApplicationsSetting
+                    WHERE ParameterName = @ParameterName
+                `);
+            
+            if (shiftResult.recordset.length === 0) {
+                throw new Error(
+                    "ProdShift not found in ApplicationsSetting"
+                );
+            }
+            
+            const prodShift =
+                shiftResult.recordset[0].ParameterValue;
+
             await new sql.Request()
                 .input(
                     "AuditListID",
@@ -391,12 +416,12 @@ const createExecuteIQC = async (
                 .input(
                     "SampleLevel",
                     sql.Int,
-                    SampleLevel
+                    1
                 )
                 .input(
                     "SampleSize",
                     sql.Int,
-                    SampleQty
+                    5
                 )
                 .input(
                     "NokSample",
@@ -416,7 +441,7 @@ const createExecuteIQC = async (
                 .input(
                     "ProdShift",
                     sql.NVarChar,
-                    ""
+                    prodShift
                 )
                 .input(
                     "AuditInstanceID",
@@ -1720,7 +1745,7 @@ const sampleCollection = async (
     await updateAuditRequest.query(`
         UPDATE QA_Execute_IQC_AuditList
         SET
-            ExecutionStartTime = GETDATE(),
+            ExecutedStartTime = GETDATE(),
             ExecutedBy = @ExecutedBy,
             Status = 2
         WHERE
