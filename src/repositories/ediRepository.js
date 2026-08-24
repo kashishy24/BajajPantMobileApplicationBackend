@@ -22,7 +22,7 @@ const getEDIList = async () => {
         FROM Material_Receiving MR
         INNER JOIN Config_Vendor V
             ON MR.VendorID = V.VendorID
-        WHERE MR.Status = 1
+        WHERE MR.Status = 4
         ORDER BY MR.EDINumber
     `);
 
@@ -44,7 +44,7 @@ const getEDIDetails = async (ediNumber) => {
             MR.EDINumber,
             MR.PartID,
             CP.PartDesc AS PartName,
-            MR.Quantity
+            MR.ValidatedQty
         FROM Material_Receiving MR
         INNER JOIN Config_PartVariant CP
             ON MR.PartID = CP.PartID
@@ -2709,27 +2709,32 @@ const getHoldMaterialList = async () => {
 
     const result = await new sql.Request().query(`
         SELECT
-            UID,
-            EDINumber,
-            VendorID,
-            PartID,
-            Quantity,
-            Timestamp,
-            ValidatedQty,
-            OKQty,
-            RejectedQty,
-            HoldQty,
-            ValidatedBy,
-            SampleQty,
-            SampleLevel,
-            Status,
-            BatchID,
-            Remark
-        FROM Material_Receiving
-        WHERE ISNULL(HoldQty, 0) > 0
-        ORDER BY Timestamp DESC
+            MR.UID,
+            MR.EDINumber,
+            V.VendorName,
+            CP.PartDesc AS PartName,
+            MR.ValidatedQty,
+            MR.Timestamp,
+            MR.OKQty,
+            MR.RejectedQty,
+            MR.HoldQty,
+            MR.ValidatedBy,
+            MR.SampleQty,
+            MR.SampleLevel,
+            MR.Status,
+            MR.BatchID,
+            MR.Remark
+        FROM Material_Receiving MR
+        INNER JOIN Config_PartVariant CP
+            ON MR.PartID = CP.PartID
+        INNER JOIN Config_Vendor V
+            ON MR.VendorID = V.VendorID
+        WHERE ISNULL(MR.HoldQty, 0) > 0
+        ORDER BY MR.Timestamp DESC
     `);
 
+     console.log("HOLD MATERIAL RESULT:");
+    console.log(result.recordset);
     return result.recordset;
 };
 

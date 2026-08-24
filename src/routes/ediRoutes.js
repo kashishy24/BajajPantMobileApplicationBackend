@@ -45,6 +45,11 @@ router.post(
 );
 
 router.get(
+    "/hold-materials",
+    ediController.getHoldMaterialList
+);
+
+router.get(
     "/validated",
     ediController.getValidatedMaterials
 );
@@ -76,11 +81,6 @@ router.post(
 router.post(
     "/iqc-failed",
     ediController.iqcFailed
-);
-
-router.get(
-    "/hold-materials",
-    ediController.getHoldMaterialList
 );
 
 router.post(
