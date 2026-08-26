@@ -77,6 +77,36 @@ const getPartDetails = async (req, res) => {
     }
 };
 
+const storeMaterial = async (req, res) => {
+    try {
+
+        const {
+            ediNumber,
+            userId,
+            parts
+        } = req.body;
+
+        const data = await ediService.storeMaterial(
+            ediNumber,
+            userId,
+            parts
+        );
+
+        return successResponse(
+            res,
+            data,
+            "Material Stored Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+    }
+};
+
 const validateQuantity = async (req, res) => {
     try {
 
@@ -88,6 +118,31 @@ const validateQuantity = async (req, res) => {
             res,
             result,
             "Quantity Validated Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+const getMaterialStatus = async (req, res) => {
+    try {
+
+        const { partID } = req.params;
+
+        const data = await ediService.getMaterialStatus(
+            partID
+        );
+
+        return successResponse(
+            res,
+            data,
+            "Material Status Fetched Successfully"
         );
 
     } catch (error) {
@@ -406,6 +461,8 @@ module.exports = {
     getEDIList,
     getEDIDetails,
     getPartDetails,
+    storeMaterial,
+    getMaterialStatus,
     validateQuantity,
     getValidatedMaterials,
     bypassMaterial,

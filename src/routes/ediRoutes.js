@@ -55,8 +55,18 @@ router.get(
 );
 
 router.get(
+    "/material-status/:partID",
+    ediController.getMaterialStatus
+);
+
+router.get(
     "/:ediNumber",
     ediController.getEDIDetails
+);
+
+router.post(
+    "/store",
+    ediController.storeMaterial
 );
 
 router.get(

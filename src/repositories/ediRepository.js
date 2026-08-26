@@ -22,7 +22,7 @@ const getEDIList = async () => {
         FROM Material_Receiving MR
         INNER JOIN Config_Vendor V
             ON MR.VendorID = V.VendorID
-        WHERE MR.Status = 4
+        WHERE MR.Status = 2
         ORDER BY MR.EDINumber
     `);
 
@@ -90,6 +90,1056 @@ const getPartDetails = async (
     `);
 
     return result.recordset[0];
+};
+
+const storeMaterial = async (
+    ediNumber,
+    partId,
+    userId
+) => {
+
+    // ============================================================
+    // STEP 1: Get Material Receiving Record
+    // ============================================================
+
+    const request = new sql.Request();
+
+    request.input(
+        "EDINumber",
+        sql.NVarChar,
+        ediNumber
+    );
+
+    request.input(
+        "PartID",
+        sql.NVarChar,
+        partId
+    );
+
+    const existing = await request.query(`
+        SELECT
+            UID,
+            VendorID,
+            Quantity,
+            PartID,
+            Status,
+            ValidatedBy,
+            ValidatedQty,
+            OKQty,
+            RejectedQty,
+            HoldQty,
+            BatchID,
+            Remark,
+            SampleQty,
+            SampleLevel,
+            TimeStamp
+        FROM Material_Receiving
+        WHERE
+            EDINumber = @EDINumber
+            AND PartID = @PartID
+    `);
+
+    if (existing.recordset.length === 0) {
+        throw new Error("Record not found");
+    }
+
+    const material = existing.recordset[0];
+
+    const actualQty = material.Quantity;
+    const receivedQty = material.ValidatedQty;
+
+
+    // ============================================================
+    // STEP 2: Check Part Inspection
+    // ============================================================
+
+    const inspectionRequest = new sql.Request();
+
+    inspectionRequest.input(
+        "PartID",
+        sql.NVarChar,
+        partId
+    );
+
+    const inspectionResult =
+        await inspectionRequest.query(`
+            SELECT PartInspection
+            FROM Config_PartVariant
+            WHERE PartID = @PartID
+        `);
+
+    if (inspectionResult.recordset.length === 0) {
+        throw new Error("Part Variant not found");
+    }
+
+    const partInspection =
+        inspectionResult.recordset[0].PartInspection;
+
+    // console.log(
+    //     "PartInspection:",
+    //     inspectionResult.recordset[0].PartInspection
+    // );
+
+    // console.log(
+    //     "Type:",
+    //     typeof inspectionResult.recordset[0].PartInspection
+    // );
+
+
+    // ============================================================
+    // STEP 3: Get UserID
+    // ============================================================
+
+    const userResult = await new sql.Request()
+        .input(
+            "UserName",
+            sql.NVarChar,
+            userId
+        )
+        .query(`
+            SELECT UserID
+            FROM Config_User
+            WHERE UserName = @UserName
+        `);
+
+    if (userResult.recordset.length === 0) {
+        throw new Error("User not found");
+    }
+
+    const validatedBy =
+        userResult.recordset[0].UserID;
+
+
+    // ============================================================
+    // STEP 4:
+    // PartInspection = 2
+    // Direct Store Flow
+    // ============================================================
+
+    if (partInspection == 2) {
+
+        // --------------------------------------------------------
+        // Update Material Receiving
+        // --------------------------------------------------------
+
+        await new sql.Request()
+            .input(
+                "ReceivedQty",
+                sql.Int,
+                receivedQty
+            )
+            .input(
+                "ValidatedBy",
+                sql.NVarChar,
+                validatedBy
+            )
+            .input(
+                "Status",
+                sql.Int,
+                9
+            )
+            .input(
+                "BatchID",
+                sql.NVarChar,
+                ediNumber
+            )
+            .input(
+                "EDINumber",
+                sql.NVarChar,
+                ediNumber
+            )
+            .input(
+                "PartID",
+                sql.NVarChar,
+                partId
+            )
+            .query(`
+                UPDATE Material_Receiving
+                SET
+                    ValidatedQty = @ReceivedQty,
+                    OKQty = @ReceivedQty,
+                    ValidatedBy = @ValidatedBy,
+                    Status = @Status,
+                    BatchID = @BatchID,
+                    TimeStamp = GETDATE()
+                WHERE
+                    EDINumber = @EDINumber
+                    AND PartID = @PartID
+            `);
+
+
+        // --------------------------------------------------------
+        // Get Batch Details
+        // --------------------------------------------------------
+
+        const batchResult = await new sql.Request()
+            .input(
+                "EDINumber",
+                sql.NVarChar,
+                ediNumber
+            )
+            .input(
+                "PartID",
+                sql.NVarChar,
+                partId
+            )
+            .query(`
+                SELECT
+                    VendorID,
+                    BatchID,
+                    ValidatedQty
+                FROM Material_Receiving
+                WHERE
+                    EDINumber = @EDINumber
+                    AND PartID = @PartID
+            `);
+
+        if (batchResult.recordset.length === 0) {
+            throw new Error(
+                "Material Receiving record not found"
+            );
+        }
+
+        const {
+            VendorID,
+            BatchID,
+            ValidatedQty
+        } = batchResult.recordset[0];
+
+
+        // --------------------------------------------------------
+        // Get Store Area
+        // --------------------------------------------------------
+
+        const areaResult =
+            await new sql.Request().query(`
+                SELECT AreaID
+                FROM Config_StorageArea
+                WHERE AreaName = 'Store'
+            `);
+
+        if (areaResult.recordset.length === 0) {
+            throw new Error("Store Area not found");
+        }
+
+        const areaID =
+            areaResult.recordset[0].AreaID;
+
+
+        // --------------------------------------------------------
+        // Get Next Priority
+        // --------------------------------------------------------
+
+        const priorityResult =
+            await new sql.Request()
+                .input(
+                    "PartID",
+                    sql.NVarChar,
+                    partId
+                )
+                .query(`
+                    SELECT
+                        ISNULL(MAX(Priority), 0) + 1
+                        AS NextPriority
+                    FROM Material_BatchWiseQty
+                    WHERE PartID = @PartID
+                `);
+
+        const priority =
+            priorityResult.recordset[0].NextPriority;
+
+
+        // --------------------------------------------------------
+        // Insert Material Batch
+        // --------------------------------------------------------
+
+        await new sql.Request()
+            .input(
+                "PartID",
+                sql.NVarChar,
+                partId
+            )
+            .input(
+                "VendorID",
+                sql.Int,
+                VendorID
+            )
+            .input(
+                "AreaID",
+                sql.Int,
+                areaID
+            )
+            .input(
+                "BatchID",
+                sql.NVarChar,
+                BatchID
+            )
+            .input(
+                "Priority",
+                sql.Int,
+                priority
+            )
+            .input(
+                "Quantity",
+                sql.Int,
+                ValidatedQty
+            )
+            .input(
+                "Consumed",
+                sql.Int,
+                0
+            )
+            .input(
+                "Status",
+                sql.Int,
+                0
+            )
+            .query(`
+                INSERT INTO Material_BatchWiseQty
+                (
+                    PartID,
+                    VendorID,
+                    AreaID,
+                    BatchID,
+                    Priority,
+                    Quantity,
+                    Consumed,
+                    Status
+                )
+                VALUES
+                (
+                    @PartID,
+                    @VendorID,
+                    @AreaID,
+                    @BatchID,
+                    @Priority,
+                    @Quantity,
+                    @Consumed,
+                    @Status
+                )
+            `);
+
+
+        // --------------------------------------------------------
+        // Update Material Stock
+        // --------------------------------------------------------
+
+        await new sql.Request()
+            .input(
+                "PartID",
+                sql.NVarChar,
+                partId
+            )
+            .input(
+                "Qty",
+                sql.Int,
+                ValidatedQty
+            )
+            .query(`
+                UPDATE Material_Stock
+                SET
+                    StoreQty =
+                        ISNULL(StoreQty, 0) + @Qty
+                WHERE PartID = @PartID
+            `);
+
+
+        // --------------------------------------------------------
+        // Insert Geneology
+        // --------------------------------------------------------
+
+        await new sql.Request()
+            .input(
+                "EDINumber",
+                sql.NVarChar,
+                ediNumber
+            )
+            .input(
+                "PartID",
+                sql.NVarChar,
+                partId
+            )
+            .input(
+                "Status",
+                sql.Int,
+                9
+            )
+            .input(
+                "LastUpdatedBy",
+                sql.NVarChar,
+                validatedBy
+            )
+            .query(`
+                INSERT INTO Material_Receiving_Geneology
+                (
+                    EDINumber,
+                    PartID,
+                    Status,
+                    LastUpdatedBy,
+                    LastUpdatedTime
+                )
+                VALUES
+                (
+                    @EDINumber,
+                    @PartID,
+                    @Status,
+                    @LastUpdatedBy,
+                    GETDATE()
+                )
+            `);
+
+
+        // --------------------------------------------------------
+        // Insert Material Receiving History
+        // --------------------------------------------------------
+
+        await new sql.Request()
+            .input(
+                "EDINumber",
+                sql.NVarChar,
+                ediNumber
+            )
+            .input(
+                "PartID",
+                sql.NVarChar,
+                partId
+            )
+            .query(`
+                INSERT INTO Material_Receiving_History
+                (
+                    EDINumber,
+                    VendorID,
+                    PartID,
+                    Quantity,
+                    TimeStamp,
+                    ValidatedQty,
+                    OKQty,
+                    RejectedQty,
+                    HoldQty,
+                    ValidatedBy,
+                    SampleQty,
+                    SampleLevel,
+                    Status,
+                    BatchID,
+                    Remark
+                )
+                SELECT
+                    EDINumber,
+                    VendorID,
+                    PartID,
+                    Quantity,
+                    TimeStamp,
+                    ValidatedQty,
+                    OKQty,
+                    RejectedQty,
+                    HoldQty,
+                    ValidatedBy,
+                    SampleQty,
+                    SampleLevel,
+                    Status,
+                    BatchID,
+                    Remark
+                FROM Material_Receiving
+                WHERE
+                    EDINumber = @EDINumber
+                    AND PartID = @PartID
+            `);
+
+
+        // --------------------------------------------------------
+        // Delete Material Receiving
+        // --------------------------------------------------------
+
+        await new sql.Request()
+            .input(
+                "EDINumber",
+                sql.NVarChar,
+                ediNumber
+            )
+            .input(
+                "PartID",
+                sql.NVarChar,
+                partId
+            )
+            .query(`
+                DELETE FROM Material_Receiving
+                WHERE
+                    EDINumber = @EDINumber
+                    AND PartID = @PartID
+            `);
+
+
+        return {
+            EDINumber: ediNumber,
+            PartID: partId,
+            StoredQty: ValidatedQty,
+            Status: 9
+        };
+    }
+
+
+    // ============================================================
+    // STEP 5:
+    // PartInspection != 2
+    // Existing IQC Flow
+    // ============================================================
+
+    else {
+
+        // --------------------------------------------------------
+        // Calculate Gap
+        // --------------------------------------------------------
+
+        const gap =
+            actualQty - receivedQty;
+
+
+        // --------------------------------------------------------
+        // Calculate Current Shift
+        // --------------------------------------------------------
+
+        const hour =
+            new Date().getHours();
+
+        let currentShift;
+
+        if (hour >= 6 && hour < 14) {
+
+            currentShift = 1;
+
+        } else if (hour >= 14 && hour < 22) {
+
+            currentShift = 2;
+
+        } else {
+
+            currentShift = 3;
+        }
+
+
+        // --------------------------------------------------------
+        // Check Same Part / Same Day / Same Shift
+        // --------------------------------------------------------
+
+        const checkRequest =
+            new sql.Request();
+
+        checkRequest.input(
+            "PartID",
+            sql.NVarChar,
+            partId
+        );
+
+        checkRequest.input(
+            "EDINumber",
+            sql.NVarChar,
+            ediNumber
+        );
+
+        const checkResult =
+            await checkRequest.query(`
+                SELECT TOP 1 UID
+                FROM Material_Receiving
+                WHERE
+                    PartID = @PartID
+                    AND EDINumber <> @EDINumber
+                    AND Status IN (6,7,8,9,10,11)
+                    AND CAST(TimeStamp AS DATE)
+                        = CAST(GETDATE() AS DATE)
+                    AND
+                    (
+                        (
+                            ${currentShift} = 1
+                            AND DATEPART(HOUR, TimeStamp)
+                                BETWEEN 6 AND 13
+                        )
+                        OR
+                        (
+                            ${currentShift} = 2
+                            AND DATEPART(HOUR, TimeStamp)
+                                BETWEEN 14 AND 21
+                        )
+                        OR
+                        (
+                            ${currentShift} = 3
+                            AND
+                            (
+                                DATEPART(HOUR, TimeStamp) >= 22
+                                OR
+                                DATEPART(HOUR, TimeStamp) < 6
+                            )
+                        )
+                    )
+            `);
+
+
+        const status =
+            checkResult.recordset.length > 0
+                ? 4
+                : 3;
+
+
+        // --------------------------------------------------------
+        // Update Material Receiving
+        // --------------------------------------------------------
+
+        const updateRequest =
+            new sql.Request();
+
+        updateRequest.input(
+            "ReceivedQty",
+            sql.Int,
+            receivedQty
+        );
+
+        updateRequest.input(
+            "ValidatedBy",
+            sql.NVarChar,
+            validatedBy
+        );
+
+        updateRequest.input(
+            "Status",
+            sql.Int,
+            status
+        );
+
+        updateRequest.input(
+            "EDINumber",
+            sql.NVarChar,
+            ediNumber
+        );
+
+        updateRequest.input(
+            "PartID",
+            sql.NVarChar,
+            partId
+        );
+
+        updateRequest.input(
+            "BatchID",
+            sql.NVarChar,
+            ediNumber
+        );
+
+        await updateRequest.query(`
+            UPDATE Material_Receiving
+            SET
+                ValidatedQty = @ReceivedQty,
+                ValidatedBy = @ValidatedBy,
+                Status = @Status,
+                BatchID = @BatchID,
+                TimeStamp = GETDATE()
+            WHERE
+                EDINumber = @EDINumber
+                AND PartID = @PartID
+        `);
+
+
+        // --------------------------------------------------------
+        // Insert Geneology
+        // --------------------------------------------------------
+
+        await new sql.Request()
+            .input(
+                "EDINumber",
+                sql.NVarChar,
+                ediNumber
+            )
+            .input(
+                "PartID",
+                sql.NVarChar,
+                partId
+            )
+            .input(
+                "Status",
+                sql.Int,
+                status
+            )
+            .input(
+                "LastUpdatedBy",
+                sql.NVarChar,
+                validatedBy
+            )
+            .query(`
+                INSERT INTO Material_Receiving_Geneology
+                (
+                    EDINumber,
+                    PartID,
+                    Status,
+                    LastUpdatedBy,
+                    LastUpdatedTime
+                )
+                VALUES
+                (
+                    @EDINumber,
+                    @PartID,
+                    @Status,
+                    @LastUpdatedBy,
+                    GETDATE()
+                )
+            `);
+
+
+        // --------------------------------------------------------
+        // Get Batch Details
+        // --------------------------------------------------------
+
+        const batchRequest =
+            new sql.Request();
+
+        batchRequest.input(
+            "EDINumber",
+            sql.NVarChar,
+            ediNumber
+        );
+
+        batchRequest.input(
+            "PartID",
+            sql.NVarChar,
+            partId
+        );
+
+        const batchResult =
+            await batchRequest.query(`
+                SELECT
+                    VendorID,
+                    BatchID,
+                    ValidatedQty
+                FROM Material_Receiving
+                WHERE
+                    EDINumber = @EDINumber
+                    AND PartID = @PartID
+            `);
+
+        if (batchResult.recordset.length === 0) {
+            throw new Error(
+                "Material Receiving record not found"
+            );
+        }
+
+        const {
+            VendorID,
+            BatchID,
+            ValidatedQty
+        } = batchResult.recordset[0];
+
+
+        // ========================================================
+        // STATUS = 3
+        // ========================================================
+
+        if (status === 3) {
+
+            const stockRequest =
+                new sql.Request();
+
+            stockRequest.input(
+                "PartID",
+                sql.NVarChar,
+                partId
+            );
+
+            stockRequest.input(
+                "Qty",
+                sql.Int,
+                ValidatedQty
+            );
+
+            await stockRequest.query(`
+                UPDATE Material_Stock
+                SET
+                    IncomingQty =
+                        ISNULL(IncomingQty, 0) + @Qty
+                WHERE PartID = @PartID
+            `);
+
+
+            return {
+                EDINumber: ediNumber,
+                PartID: partId,
+                ReceivedQty: receivedQty,
+                ExpectedQty: actualQty,
+                Gap: gap,
+                Status: 3,
+                message: "Material moved to Incoming"
+            };
+        }
+
+
+        // ========================================================
+        // STATUS = 4
+        // ========================================================
+
+        else if (status === 4) {
+
+            // ----------------------------------------------------
+            // Get Store Area
+            // ----------------------------------------------------
+
+            const areaResult =
+                await new sql.Request().query(`
+                    SELECT AreaID
+                    FROM Config_StorageArea
+                    WHERE AreaName = 'Store'
+                `);
+
+            if (areaResult.recordset.length === 0) {
+                throw new Error(
+                    "Store Area not found"
+                );
+            }
+
+            const areaID =
+                areaResult.recordset[0].AreaID;
+
+
+            // ----------------------------------------------------
+            // Get Next Priority
+            // ----------------------------------------------------
+
+            const priorityResult =
+                await new sql.Request()
+                    .input(
+                        "PartID",
+                        sql.NVarChar,
+                        partId
+                    )
+                    .query(`
+                        SELECT
+                            ISNULL(MAX(Priority), 0) + 1
+                            AS NextPriority
+                        FROM Material_BatchWiseQty
+                        WHERE PartID = @PartID
+                    `);
+
+            const priority =
+                priorityResult.recordset[0].NextPriority;
+
+
+            // ----------------------------------------------------
+            // Insert Material Batch
+            // ----------------------------------------------------
+
+            await new sql.Request()
+                .input(
+                    "PartID",
+                    sql.NVarChar,
+                    partId
+                )
+                .input(
+                    "VendorID",
+                    sql.Int,
+                    VendorID
+                )
+                .input(
+                    "AreaID",
+                    sql.Int,
+                    areaID
+                )
+                .input(
+                    "BatchID",
+                    sql.NVarChar,
+                    BatchID
+                )
+                .input(
+                    "Priority",
+                    sql.Int,
+                    priority
+                )
+                .input(
+                    "Quantity",
+                    sql.Int,
+                    ValidatedQty
+                )
+                .input(
+                    "Consumed",
+                    sql.Int,
+                    0
+                )
+                .input(
+                    "Status",
+                    sql.Int,
+                    0
+                )
+                .query(`
+                    INSERT INTO Material_BatchWiseQty
+                    (
+                        PartID,
+                        VendorID,
+                        AreaID,
+                        BatchID,
+                        Priority,
+                        Quantity,
+                        Consumed,
+                        Status
+                    )
+                    VALUES
+                    (
+                        @PartID,
+                        @VendorID,
+                        @AreaID,
+                        @BatchID,
+                        @Priority,
+                        @Quantity,
+                        @Consumed,
+                        @Status
+                    )
+                `);
+
+
+            // ----------------------------------------------------
+            // Check Incoming Quantity
+            // ----------------------------------------------------
+
+            const checkStock =
+                await new sql.Request()
+                    .input(
+                        "PartID",
+                        sql.NVarChar,
+                        partId
+                    )
+                    .query(`
+                        SELECT IncomingQty
+                        FROM Material_Stock
+                        WHERE PartID = @PartID
+                    `);
+
+            if (checkStock.recordset.length === 0) {
+                throw new Error(
+                    "Material Stock record not found"
+                );
+            }
+
+            if (
+                checkStock.recordset[0].IncomingQty
+                < ValidatedQty
+            ) {
+                throw new Error(
+                    "Incoming quantity is less than validated quantity."
+                );
+            }
+
+
+            // ----------------------------------------------------
+            // Move Incoming -> Store
+            // ----------------------------------------------------
+
+            const stockRequest =
+                new sql.Request();
+
+            stockRequest.input(
+                "PartID",
+                sql.NVarChar,
+                partId
+            );
+
+            stockRequest.input(
+                "Qty",
+                sql.Int,
+                ValidatedQty
+            );
+
+            await stockRequest.query(`
+                UPDATE Material_Stock
+                SET
+                    StoreQty =
+                        ISNULL(StoreQty, 0) + @Qty
+                WHERE PartID = @PartID
+            `);
+
+
+            // ----------------------------------------------------
+            // Insert History
+            // ----------------------------------------------------
+
+            await new sql.Request()
+                .input(
+                    "EDINumber",
+                    sql.NVarChar,
+                    ediNumber
+                )
+                .input(
+                    "PartID",
+                    sql.NVarChar,
+                    partId
+                )
+                .query(`
+                    INSERT INTO Material_Receiving_History
+                    (
+                        EDINumber,
+                        VendorID,
+                        PartID,
+                        Quantity,
+                        TimeStamp,
+                        ValidatedQty,
+                        OKQty,
+                        RejectedQty,
+                        HoldQty,
+                        ValidatedBy,
+                        SampleQty,
+                        SampleLevel,
+                        Status,
+                        BatchID,
+                        Remark
+                    )
+                    SELECT
+                        EDINumber,
+                        VendorID,
+                        PartID,
+                        Quantity,
+                        TimeStamp,
+                        ValidatedQty,
+                        OKQty,
+                        RejectedQty,
+                        HoldQty,
+                        ValidatedBy,
+                        SampleQty,
+                        SampleLevel,
+                        Status,
+                        BatchID,
+                        Remark
+                    FROM Material_Receiving
+                    WHERE
+                        EDINumber = @EDINumber
+                        AND PartID = @PartID
+                `);
+
+
+            // ----------------------------------------------------
+            // Delete Material Receiving
+            // ----------------------------------------------------
+
+            await new sql.Request()
+                .input(
+                    "EDINumber",
+                    sql.NVarChar,
+                    ediNumber
+                )
+                .input(
+                    "PartID",
+                    sql.NVarChar,
+                    partId
+                )
+                .query(`
+                    DELETE FROM Material_Receiving
+                    WHERE
+                        EDINumber = @EDINumber
+                        AND PartID = @PartID
+                `);
+
+
+            return {
+                EDINumber: ediNumber,
+                PartID: partId,
+                ReceivedQty: receivedQty,
+                ExpectedQty: actualQty,
+                Gap: gap,
+                Status: 4,
+                StoredQty: ValidatedQty
+            };
+        }
+    }
 };
 
 const createExecuteIQC = async (
@@ -1136,6 +2186,40 @@ const validateQuantity = async (
         gap,
         status
     };}
+};
+
+const getMaterialStatus = async (partID) => {
+
+    const request = new sql.Request();
+
+    request.input(
+        "PartID",
+        sql.NVarChar(20),
+        partID
+    );
+
+    const result = await request.query(`
+        SELECT
+            MS.PartID,
+            CP.PartDesc AS PartName,
+            MS.IncomingQty,
+            MS.StoreQty,
+            MS.StoreHoldQty,
+            MS.LineCKitRackQty,
+            MS.LineCHoldKitRackQty,
+            MS.LineCMaterialOnKit,
+            MS.LineCHoldMaterialOnKit,
+            MS.LineCQty,
+            MS.LineCHoldQty,
+            MS.LinesideCQty,
+            MS.LinesideCHoldQty
+        FROM Material_Stock MS
+        INNER JOIN Config_PartVariant CP
+            ON MS.PartID = CP.PartID
+        WHERE MS.PartID = @PartID
+    `);
+
+    return result.recordset;
 };
 
 const getValidatedMaterials = async () => {
@@ -2199,13 +3283,16 @@ const getIQCHoldList = async () => {
                 V.VendorName,
                 MR.Quantity,
                 MR.ValidatedQty,
+                MR.OKQty,
+                MR.RejectedQty,
+                MR.HoldQty,
                 MR.Status
             FROM Material_Receiving MR
             INNER JOIN Config_PartVariant CP
                 ON MR.PartID = CP.PartID
             INNER JOIN Config_Vendor V
                 ON MR.VendorID = V.VendorID
-            WHERE MR.Status in (3)
+            WHERE MR.Status in (3 , 6 , 7 , 8)
             ORDER BY MR.EDINumber
         `);
 
@@ -3861,8 +4948,10 @@ module.exports = {
     getEDIList,
     getEDIDetails,
     getPartDetails,
+    storeMaterial,
     confirmIQC,
     validateQuantity,
+    getMaterialStatus,
     getValidatedMaterials,
     bypassMaterial,
     sampleCollection,
