@@ -385,11 +385,6 @@ const storeMaterial = async (
                 ValidatedQty
             )
             .input(
-                "Consumed",
-                sql.Int,
-                0
-            )
-            .input(
                 "Status",
                 sql.Int,
                 0
@@ -403,7 +398,6 @@ const storeMaterial = async (
                     BatchID,
                     Priority,
                     Quantity,
-                    Consumed,
                     Status
                 )
                 VALUES
@@ -414,7 +408,6 @@ const storeMaterial = async (
                     @BatchID,
                     @Priority,
                     @Quantity,
-                    @Consumed,
                     @Status
                 )
             `);

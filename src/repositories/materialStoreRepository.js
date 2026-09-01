@@ -351,6 +351,61 @@ const moveMaterialToStore = async (
 
 };
 
+const getMaterialRejectedList = async () => {
+
+    const result = await new sql.Request().query(`
+        SELECT
+            MR.partID AS PartID,
+            CP.PartName,
+            CV.VendorName,
+            MR.ProdDate,
+            MR.ProdShift,
+            MR.BatchID,
+            MR.Quantity,
+            MR.Timestamp,
+            MR.RejectionSource,
+            MR.Status
+        FROM Material_Rejected MR
+
+        INNER JOIN Config_PartVariant CP
+            ON MR.partID = CP.PartID
+
+        INNER JOIN Config_Vendor CV
+            ON MR.VendorID = CV.VendorID
+
+        ORDER BY
+            MR.Timestamp DESC
+    `);
+
+    return result.recordset;
+};
+
+const getRunningProductionPlans = async () => {
+
+    const result = await new sql.Request().query(`
+        SELECT
+            MRP.PlanID,
+            MRP.PartID,
+            CP.PartName,
+            MRP.TotalRequiredQty,
+            MRP.DeliveredQty,
+            MRP.ConsumedQty
+        FROM Material_Running_Plan MRP
+
+        INNER JOIN Config_PartVariant CP
+            ON MRP.PartID = CP.PartID
+
+        WHERE
+            MRP.MesControlled = 1
+
+        ORDER BY
+            MRP.PlanID,
+            CP.PartName
+    `);
+
+    return result.recordset;
+};
+
 module.exports = {
     getMaterialStoreList,
     getDeliveryPlans,
@@ -358,5 +413,7 @@ module.exports = {
     getSubAssemblyLines,
     getSubAssemblyDetails,
     getLineSideMaterial,
-    moveMaterialToStore
+    moveMaterialToStore,
+    getMaterialRejectedList,
+    getRunningProductionPlans
 };

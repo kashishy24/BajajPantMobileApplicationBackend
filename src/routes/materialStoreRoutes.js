@@ -39,4 +39,14 @@ router.post(
     materialStoreController.moveMaterialToStore
 );
 
+router.get(
+    "/materials/rejected",
+    materialStoreController.getMaterialRejectedList
+);
+
+router.get(
+    "/production-plans/running",
+    materialStoreController.getRunningProductionPlans
+);
+
 module.exports = router;

@@ -58,7 +58,6 @@ const getKittingDetails = async (planId, skuId) => {
     return parts;
 };
 
-
 const getSubAssemblyLines = async () => {
 
     return await materialStoreRepository.getSubAssemblyLines();
@@ -143,6 +142,17 @@ const moveMaterialToStore = async (
 
 };
 
+const getMaterialRejectedList = async () => {
+
+    return await materialStoreRepository.getMaterialRejectedList();
+
+};
+
+const getRunningProductionPlans = async () => {
+
+    return await materialStoreRepository.getRunningProductionPlans();
+
+};
 
 module.exports = {
     getMaterialStoreList,
@@ -151,5 +161,7 @@ module.exports = {
     getSubAssemblyLines,
     getSubAssemblyDetails,
     getLineSideMaterial,
-    moveMaterialToStore
+    moveMaterialToStore,
+    getMaterialRejectedList,
+    getRunningProductionPlans
 };

@@ -1,5 +1,6 @@
 const materialStoreService = require("../services/materialStoreService");
 
+
 const {
     successResponse,
     errorResponse
@@ -179,6 +180,50 @@ const moveMaterialToStore = async (req, res) => {
 
 };
 
+const getMaterialRejectedList = async (req, res) => {
+
+    try {
+
+        const data = await materialStoreService.getMaterialRejectedList();
+
+        return successResponse(
+            res,
+            data,
+            "Rejected Material Data Fetched Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+const getRunningProductionPlans = async (req, res) => {
+
+    try {
+
+        const data = await materialStoreService.getRunningProductionPlans();
+
+        return successResponse(
+            res,
+            data,
+            "Running Production Plan Fetched Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+
+};
 
 module.exports = {
     getMaterialStoreList,
@@ -187,5 +232,7 @@ module.exports = {
     getSubAssemblyLines,
     getSubAssemblyDetails,
     getLineSideMaterial,
-    moveMaterialToStore
+    moveMaterialToStore,
+    getMaterialRejectedList,
+    getRunningProductionPlans
 };
