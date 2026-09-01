@@ -389,6 +389,11 @@ const storeMaterial = async (
                 sql.Int,
                 0
             )
+            .input(
+                "RunningBatch",
+                sql.Int,
+                1
+            )
             .query(`
                 INSERT INTO Material_BatchWiseQty
                 (
@@ -397,8 +402,9 @@ const storeMaterial = async (
                     AreaID,
                     BatchID,
                     Priority,
-                    Quantity,
-                    Status
+                    OpenQty,
+                    Status,
+                    RunningBatch
                 )
                 VALUES
                 (
@@ -408,7 +414,8 @@ const storeMaterial = async (
                     @BatchID,
                     @Priority,
                     @Quantity,
-                    @Status
+                    @Status,
+                    @RunningBatch
                 )
             `);
 
@@ -955,6 +962,11 @@ const storeMaterial = async (
                     sql.Int,
                     0
                 )
+                .input(
+                    "RunningBatch",
+                    sql.Int,
+                    2
+                )
                 .query(`
                     INSERT INTO Material_BatchWiseQty
                     (
@@ -965,7 +977,8 @@ const storeMaterial = async (
                         Priority,
                         Quantity,
                         Consumed,
-                        Status
+                        Status,
+                        RunningBatch
                     )
                     VALUES
                     (
@@ -976,7 +989,8 @@ const storeMaterial = async (
                         @Priority,
                         @Quantity,
                         @Consumed,
-                        @Status
+                        @Status,
+                        @RunningBatch
                     )
                 `);
 
