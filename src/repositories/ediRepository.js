@@ -353,6 +353,28 @@ const storeMaterial = async (
         // Insert Material Batch
         // --------------------------------------------------------
 
+        // --------------------------------------------------------
+        // Get EnginePartID from Config_PartVariant
+        // --------------------------------------------------------
+        
+        const partResult = await new sql.Request()
+            .input(
+                "PartID",
+                sql.NVarChar,
+                partId
+            )
+            .query(`
+                SELECT EnginePartID
+                FROM Config_PartVariant
+                WHERE PartID = @PartID
+            `);
+        
+        if (partResult.recordset.length === 0) {
+            throw new Error("Part Variant not found");
+        }
+        
+        const EnginePartID = partResult.recordset[0].EnginePartID;
+
         await new sql.Request()
             .input(
                 "PartID",
@@ -394,9 +416,15 @@ const storeMaterial = async (
                 sql.Int,
                 1
             )
+            .input(
+                "EnginePartID",
+                sql.Int,
+                EnginePartID
+            )
             .query(`
                 INSERT INTO Material_BatchWiseQty
                 (
+                    EnginePartID,
                     PartID,
                     VendorID,
                     AreaID,
@@ -408,6 +436,7 @@ const storeMaterial = async (
                 )
                 VALUES
                 (
+                    @EnginePartID,
                     @PartID,
                     @VendorID,
                     @AreaID,
@@ -921,6 +950,28 @@ const storeMaterial = async (
             // Insert Material Batch
             // ----------------------------------------------------
 
+            // --------------------------------------------------------
+            // Get EnginePartID from Config_PartVariant
+            // --------------------------------------------------------
+            
+            const partResult = await new sql.Request()
+                .input(
+                    "PartID",
+                    sql.NVarChar,
+                    partId
+                )
+                .query(`
+                    SELECT EnginePartID
+                    FROM Config_PartVariant
+                    WHERE PartID = @PartID
+                `);
+            
+            if (partResult.recordset.length === 0) {
+                throw new Error("Part Variant not found");
+            }
+            
+            const EnginePartID = partResult.recordset[0].EnginePartID;
+
             await new sql.Request()
                 .input(
                     "PartID",
@@ -967,9 +1018,15 @@ const storeMaterial = async (
                     sql.Int,
                     2
                 )
+                .input(
+                    "EnginePartID",
+                    sql.Int,
+                    EnginePartID
+                )
                 .query(`
                     INSERT INTO Material_BatchWiseQty
                     (
+                        EnginePartID,
                         PartID,
                         VendorID,
                         AreaID,
@@ -982,6 +1039,7 @@ const storeMaterial = async (
                     )
                     VALUES
                     (
+                        @EnginePartID,
                         @PartID,
                         @VendorID,
                         @AreaID,
