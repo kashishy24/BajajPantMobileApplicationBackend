@@ -406,6 +406,595 @@ const getRunningProductionPlans = async () => {
     return result.recordset;
 };
 
+const getMaterialRequestList = async () => {
+
+    const result = await new sql.Request().query(`
+        SELECT
+            MRP.PlanID,
+            MRP.PartID,
+            CP.PartName,
+            MRP.TotalRequiredQty as RequiredQty
+        FROM Material_Running_Plan MRP
+
+        INNER JOIN Config_PartVariant CP
+            ON MRP.PartID = CP.PartID
+
+        WHERE
+            MRP.Status = 1
+            AND MRP.MesControlled = 2
+
+        ORDER BY
+            MRP.PlanID,
+            CP.PartName
+    `);
+
+    return result.recordset;
+};
+
+const getMaterialAlertList = async () => {
+    const result = await new sql.Request().query(`
+        SELECT
+            MRP.PlanID,
+            MRP.PartID,
+            CP.PartName,
+            MRP.ToBeIssuedQty as RequiredQty
+        FROM Material_Running_Plan MRP
+        INNER JOIN Config_PartVariant CP
+            ON MRP.PartID = CP.PartID
+        WHERE
+            MRP.Status = 1
+            AND MRP.MesControlled = 1
+            AND MRP.ToBeIssuedQty > 0
+        ORDER BY
+            MRP.PlanID,
+            CP.PartName
+    `);
+
+    return result.recordset;
+};
+
+const issueMaterial = async (planId, partId, requiredQty) => {
+    const request = new sql.Request();
+
+    request.input("PlanID", sql.Int, planId);
+    request.input("PartID", sql.NVarChar(20), partId);
+    request.input("RequiredQty", sql.Int, requiredQty);
+
+    const result = await request.query(`
+        UPDATE Material_Running_Plan
+        SET Status = 2
+        WHERE
+            PlanID = @PlanID
+            AND PartID = @PartID
+            AND RequiredQty = @RequiredQty
+            AND Status = 1
+    `);
+
+    if (result.rowsAffected[0] === 0) {
+        throw new Error(
+            "Material request not found or material is already issued."
+        );
+    }
+
+    return {
+        PlanID: planId,
+        PartID: partId,
+        RequiredQty: requiredQty,
+        Status: 2
+    };
+};
+
+// const getMaterialDeliverList = async () => {
+//     const result = await new sql.Request().query(`
+//         SELECT
+//             MRP.PlanID,
+//             MRP.PartID,
+//             CP.PartName,
+//             MRP.MesControlled,
+//             CASE
+//                 WHEN MRP.MesControlled = 1
+//                     THEN MRP.ToBeIssuedQty
+//                 WHEN MRP.MesControlled = 2
+//                     THEN MRP.TotalRequiredQty
+//             END AS DeliverQty
+//         FROM Material_Running_Plan MRP
+//         INNER JOIN Config_PartVariant CP
+//             ON MRP.PartID = CP.PartID
+//         WHERE
+//             MRP.Status = 2
+//         ORDER BY
+//             MRP.PlanID,
+//             CP.PartName
+//     `);
+
+//     return result.recordset;
+// };
+
+const getMaterialDeliverList = async () => {
+    const result = await new sql.Request().query(`
+        SELECT
+            MRP.PlanID,
+            MRP.PartID,
+            CP.PartName,
+            MRP.MesControlled,
+
+            CASE
+                WHEN MRP.MesControlled = 1
+                    THEN MRP.ToBeIssuedQty
+                WHEN MRP.MesControlled = 2
+                    THEN MRP.TotalRequiredQty
+            END AS DeliverQty,
+
+            CB.MaterialMoveType
+
+        FROM Material_Running_Plan MRP
+
+        INNER JOIN Prod_Plan PP
+            ON MRP.PlanID = PP.PlanID
+
+        INNER JOIN Config_BOM CB
+            ON PP.SKUID = CB.SKUID
+            AND MRP.PartID = CB.PartID
+
+        INNER JOIN Config_PartVariant CP
+            ON MRP.PartID = CP.PartID
+
+        WHERE
+            MRP.Status = 2
+
+        ORDER BY
+            MRP.PlanID,
+            CP.PartName
+    `);
+
+    return result.recordset;
+};
+
+const deliverMaterial = async (
+    planId,
+    partId,
+    deliveredQty,
+    materialMoveType
+) => {
+
+    const transaction = new sql.Transaction();
+
+    try {
+
+        if (deliveredQty <= 0) {
+            throw new Error("Delivered quantity must be greater than 0.");
+        }
+
+        await transaction.begin();
+
+        // ----------------------------------------------------
+        // Step 1: Get Running Plan
+        // ----------------------------------------------------
+
+        const planRequest = new sql.Request(transaction);
+
+        planRequest.input("PlanID", sql.Int, planId);
+        planRequest.input("PartID", sql.NVarChar(20), partId);
+
+        const planResult = await planRequest.query(`
+            SELECT
+                UID,
+                PlanID,
+                PartID,
+                TotalRequiredQty,
+                RequiredQty,
+                ToBeIssuedQty,
+                DeliveredQty,
+                ConsumedQty,
+                MesControlled,
+                Status
+            FROM Material_Running_Plan
+            WHERE
+                PlanID = @PlanID
+                AND PartID = @PartID
+                AND Status = 2
+        `);
+
+        if (planResult.recordset.length === 0) {
+            throw new Error(
+                "Material issue record not found or material is not in Issue status."
+            );
+        }
+
+        const plan = planResult.recordset[0];
+
+        // ----------------------------------------------------
+        // Step 2: Validate Delivered Quantity
+        // ----------------------------------------------------
+
+        let maxDeliverQty;
+
+        if (plan.MesControlled === 1) {
+            maxDeliverQty = plan.ToBeIssuedQty;
+        } else {
+            maxDeliverQty = plan.TotalRequiredQty - plan.DeliveredQty;
+        }
+
+        if (deliveredQty > maxDeliverQty) {
+            throw new Error(
+                `Delivered quantity cannot be greater than pending quantity (${maxDeliverQty}).`
+            );
+        }
+
+        // ----------------------------------------------------
+        // Step 3: Get Batch-wise Material
+        // ----------------------------------------------------
+
+        const batchRequest = new sql.Request(transaction);
+
+        batchRequest.input("PartID", sql.NVarChar(20), partId);
+
+        const batchResult = await batchRequest.query(`
+            SELECT
+                UID,
+                PartID,
+                BatchID,
+                Priority,
+                OpenQty,
+                Used,
+                Moved,
+                Rejected,
+                Status
+            FROM Material_BatchWiseQty
+            WHERE
+                PartID = @PartID
+                AND OpenQty > 0
+                AND Status = 0
+            ORDER BY
+                Priority,
+                UID
+        `);
+
+        const batches = batchResult.recordset;
+
+        if (batches.length === 0) {
+            throw new Error(
+                "No available batch quantity found for this material."
+            );
+        }
+
+        // ----------------------------------------------------
+        // Step 4: Check Total Available Quantity
+        // ----------------------------------------------------
+
+        const totalAvailableQty = batches.reduce(
+            (total, batch) => total + batch.OpenQty,
+            0
+        );
+
+        if (totalAvailableQty < deliveredQty) {
+            throw new Error(
+                `Insufficient material quantity. Available quantity: ${totalAvailableQty}.`
+            );
+        }
+
+        // ----------------------------------------------------
+        // Step 5: Update Batch-wise Quantity
+        // ----------------------------------------------------
+
+        let remainingQty = deliveredQty;
+
+        for (const batch of batches) {
+
+            if (remainingQty <= 0) {
+                break;
+            }
+
+            const moveQty = Math.min(
+                remainingQty,
+                batch.OpenQty
+            );
+
+            const batchUpdateRequest = new sql.Request(transaction);
+
+            batchUpdateRequest.input(
+                "UID",
+                sql.Int,
+                batch.UID
+            );
+
+            batchUpdateRequest.input(
+                "MoveQty",
+                sql.Int,
+                moveQty
+            );
+
+            await batchUpdateRequest.query(`
+                UPDATE Material_BatchWiseQty
+                SET
+                    OpenQty = OpenQty - @MoveQty,
+                    Moved = ISNULL(Moved, 0) + @MoveQty,
+
+                    Status =
+                        CASE
+                            WHEN OpenQty - @MoveQty = 0
+                            THEN 1
+                            ELSE Status
+                        END
+                WHERE
+                    UID = @UID
+            `);
+
+            remainingQty -= moveQty;
+        }
+
+        // ----------------------------------------------------
+        // Step 6: Update Material Stock
+        // ----------------------------------------------------
+
+        const stockRequest = new sql.Request(transaction);
+
+        stockRequest.input(
+            "PartID",
+            sql.NVarChar(20),
+            partId
+        );
+
+        stockRequest.input(
+            "DeliveredQty",
+            sql.Int,
+            deliveredQty
+        );
+
+        stockRequest.input(
+            "MaterialMoveType",
+            sql.Int,
+            materialMoveType
+        );
+
+        // MaterialMoveType 7 = Store To KittingRack
+        if (materialMoveType === 7) {
+
+            const stockResult = await stockRequest.query(`
+                UPDATE Material_Stock
+                SET
+                    StoreQty = ISNULL(StoreQty, 0) - @DeliveredQty,
+                    LineCKitRackQty =
+                        ISNULL(LineCKitRackQty, 0) + @DeliveredQty
+                WHERE
+                    PartID = @PartID
+                    AND ISNULL(StoreQty, 0) >= @DeliveredQty
+            `);
+
+            if (stockResult.rowsAffected[0] === 0) {
+                throw new Error(
+                    "Insufficient Store Quantity."
+                );
+            }
+
+        } else {
+
+            const stockResult = await stockRequest.query(`
+                UPDATE Material_Stock
+                SET
+                    StoreQty = ISNULL(StoreQty, 0) - @DeliveredQty,
+                    LineCQty =
+                        ISNULL(LineCQty, 0) + @DeliveredQty
+                WHERE
+                    PartID = @PartID
+                    AND ISNULL(StoreQty, 0) >= @DeliveredQty
+            `);
+
+            if (stockResult.rowsAffected[0] === 0) {
+                throw new Error(
+                    "Insufficient Store Quantity."
+                );
+            }
+        }
+
+        // ----------------------------------------------------
+        // Step 7: Update Material Running Plan
+        // ----------------------------------------------------
+
+        let deliveredIncrement = deliveredQty;
+
+        let newRequiredQty = plan.RequiredQty;
+        let newToBeIssuedQty = plan.ToBeIssuedQty;
+        let newDeliveredQty =
+            plan.DeliveredQty + deliveredIncrement;
+
+        if (plan.MesControlled === 1) {
+
+            newToBeIssuedQty =
+                Math.max(
+                    0,
+                    plan.ToBeIssuedQty - deliveredQty
+                );
+
+            newRequiredQty =
+                Math.max(
+                    0,
+                    plan.RequiredQty - deliveredQty
+                );
+
+        }
+
+        // Status 3 = Delivered
+        const runningPlanRequest = new sql.Request(transaction);
+
+        runningPlanRequest.input(
+            "UID",
+            sql.Int,
+            plan.UID
+        );
+
+        runningPlanRequest.input(
+            "RequiredQty",
+            sql.Int,
+            newRequiredQty
+        );
+
+        runningPlanRequest.input(
+            "ToBeIssuedQty",
+            sql.Int,
+            newToBeIssuedQty
+        );
+
+        runningPlanRequest.input(
+            "DeliveredQty",
+            sql.Int,
+            newDeliveredQty
+        );
+
+        await runningPlanRequest.query(`
+            UPDATE Material_Running_Plan
+            SET
+                Status = 3,
+                RequiredQty = @RequiredQty,
+                ToBeIssuedQty = @ToBeIssuedQty,
+                DeliveredQty = @DeliveredQty
+            WHERE
+                UID = @UID
+        `);
+
+        // ----------------------------------------------------
+        // Step 8: Insert into History
+        // ----------------------------------------------------
+
+        /*
+            Move to history only when complete delivery is done.
+        */
+
+        const isCompleted =
+            newDeliveredQty >= plan.TotalRequiredQty;
+
+        if (isCompleted) {
+
+            const historyRequest =
+                new sql.Request(transaction);
+
+            historyRequest.input(
+                "PlanID",
+                sql.Int,
+                plan.PlanID
+            );
+
+            historyRequest.input(
+                "PartID",
+                sql.NVarChar(20),
+                plan.PartID
+            );
+
+            historyRequest.input(
+                "TotalRequiredQty",
+                sql.Int,
+                plan.TotalRequiredQty
+            );
+
+            historyRequest.input(
+                "RequiredQty",
+                sql.Int,
+                newRequiredQty
+            );
+
+            historyRequest.input(
+                "ToBeIssuedQty",
+                sql.Int,
+                newToBeIssuedQty
+            );
+
+            historyRequest.input(
+                "DeliveredQty",
+                sql.Int,
+                newDeliveredQty
+            );
+
+            historyRequest.input(
+                "ConsumedQty",
+                sql.Int,
+                plan.ConsumedQty
+            );
+
+            historyRequest.input(
+                "MesControlled",
+                sql.Int,
+                plan.MesControlled
+            );
+
+            historyRequest.input(
+                "Status",
+                sql.Int,
+                3
+            );
+
+            await historyRequest.query(`
+                INSERT INTO Material_Running_Plan_History
+                (
+                    PlanID,
+                    PartID,
+                    TotalRequiredQty,
+                    RequiredQty,
+                    ToBeIssuedQty,
+                    DeliveredQty,
+                    ConsumedQty,
+                    MesControlled,
+                    Status
+                )
+                VALUES
+                (
+                    @PlanID,
+                    @PartID,
+                    @TotalRequiredQty,
+                    @RequiredQty,
+                    @ToBeIssuedQty,
+                    @DeliveredQty,
+                    @ConsumedQty,
+                    @MesControlled,
+                    @Status
+                )
+            `);
+
+            // ------------------------------------------------
+            // Delete completed running plan
+            // ------------------------------------------------
+
+            const deleteRequest =
+                new sql.Request(transaction);
+
+            deleteRequest.input(
+                "UID",
+                sql.Int,
+                plan.UID
+            );
+
+            await deleteRequest.query(`
+                DELETE FROM Material_Running_Plan
+                WHERE UID = @UID
+            `);
+        }
+
+        await transaction.commit();
+
+        return {
+            PlanID: plan.PlanID,
+            PartID: plan.PartID,
+            DeliveredQty: deliveredQty,
+            MaterialMoveType: materialMoveType,
+            MesControlled: plan.MesControlled,
+            Status: isCompleted ? 3 : 3,
+            // HistoryMoved: isCompleted
+        };
+
+    } catch (error) {
+
+        try {
+            await transaction.rollback();
+        } catch (rollbackError) {
+            console.error(
+                "Transaction rollback failed:",
+                rollbackError
+            );
+        }
+
+        throw error;
+    }
+};
+
 module.exports = {
     getMaterialStoreList,
     getDeliveryPlans,
@@ -415,5 +1004,10 @@ module.exports = {
     getLineSideMaterial,
     moveMaterialToStore,
     getMaterialRejectedList,
-    getRunningProductionPlans
+    getRunningProductionPlans,
+    getMaterialRequestList,
+    getMaterialAlertList,
+    issueMaterial,
+    getMaterialDeliverList,
+    deliverMaterial
 };

@@ -154,6 +154,43 @@ const getRunningProductionPlans = async () => {
 
 };
 
+const getMaterialRequestList = async () => {
+
+    return await materialStoreRepository.getMaterialRequestList();
+
+};
+
+const getMaterialAlertList = async () => {
+    return await materialStoreRepository.getMaterialAlertList();
+};
+
+const issueMaterial = async (planId, partId, requiredQty) => {
+    return await materialStoreRepository.issueMaterial(
+        planId,
+        partId,
+        requiredQty
+    );
+};
+
+const getMaterialDeliverList = async () => {
+    return await materialStoreRepository.getMaterialDeliverList();
+};
+
+const deliverMaterial = async (
+    planId,
+    partId,
+    deliveredQty,
+    materialMoveType
+) => {
+
+    return await materialStoreRepository.deliverMaterial(
+        planId,
+        partId,
+        deliveredQty,
+        materialMoveType
+    );
+};
+
 module.exports = {
     getMaterialStoreList,
     getDeliveryPlans,
@@ -163,5 +200,10 @@ module.exports = {
     getLineSideMaterial,
     moveMaterialToStore,
     getMaterialRejectedList,
-    getRunningProductionPlans
+    getRunningProductionPlans,
+    getMaterialRequestList,
+    getMaterialAlertList,
+    issueMaterial,
+    getMaterialDeliverList,
+    deliverMaterial
 };
