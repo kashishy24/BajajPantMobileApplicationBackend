@@ -3864,6 +3864,7 @@ const getHoldMaterialList = async () => {
             MR.UID,
             MR.EDINumber,
             V.VendorName,
+            MR.PartID,
             CP.PartDesc AS PartName,
             MR.ValidatedQty,
             MR.Timestamp,

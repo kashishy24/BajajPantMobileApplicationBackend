@@ -328,11 +328,12 @@ const deliverMaterial = async (req, res) => {
 
         }
 
-        if (deliveredQty <= 0) {
+                // 0 is allowed
+        if (Number(deliveredQty) < 0) {
 
             return errorResponse(
                 res,
-                "DeliveredQty must be greater than 0."
+                "DeliveredQty cannot be negative."
             );
 
         }

@@ -15,6 +15,11 @@ router.get(
 );
 
 router.get(
+    "/hold-materials",
+    ediController.getHoldMaterialList
+);
+
+router.get(
     "/iqc-hold",
     ediController.getIQCHoldList
 );
@@ -42,11 +47,6 @@ router.get(
 router.post(
     "/confirm-audit-list",
     ediController.confirmAuditList
-);
-
-router.get(
-    "/hold-materials",
-    ediController.getHoldMaterialList
 );
 
 router.get(

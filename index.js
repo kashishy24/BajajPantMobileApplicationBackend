@@ -9,7 +9,7 @@ const iqcRoutes = require("./src/routes/IQCRoutes");
 const ipqcRoutes = require("./src/routes/ipqcRoutes");
 const materialStoreRoutes = require("./src/routes/materialStoreRoutes");
 const ticketRoutes = require("./src/routes/ticketRoutes");
-
+const productionRoutes = require("./src/routes/productionRoutes");
 
 
 const { connectDB } = require("./src/config/db");
@@ -38,6 +38,7 @@ app.use("/api/iqc", iqcRoutes);
 app.use("/api/ipqc", ipqcRoutes);
 app.use("/api/material-store", materialStoreRoutes);
 app.use("/api/tickets", ticketRoutes);
+app.use("/api/productionSupervisor", productionRoutes);
 
 const PORT = process.env.PORT || 5000;
 
