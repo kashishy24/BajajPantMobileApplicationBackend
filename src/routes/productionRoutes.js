@@ -43,4 +43,56 @@ router.get(
     productionController.getInspectionDefects
 );
 
+// =====================================================
+// Engine Take IN
+// =====================================================
+
+router.get(
+    "/engine-takein/engines",
+    productionController.getReworkTakeInEngines
+);
+
+
+router.get(
+    "/engine-takein/details",
+    productionController.getEngineTakeInDetails
+);
+
+
+router.post(
+    "/engine-takein",
+    productionController.engineTakeIn
+);
+
+
+// =====================================================
+// Material Request
+// =====================================================
+
+router.get(
+    "/material-request/materials",
+    productionController.getNonMesControlledMaterials
+);
+
+
+router.post(
+    "/material-request",
+    productionController.createMaterialRequest
+);
+
+router.get(
+    "/call-logs",
+    productionController.getProductionCallLogs
+);
+
+router.post(
+    "/call-logs/ack",
+    productionController.acknowledgeProductionCall
+);
+
+router.post(
+    "/call-logs/close",
+    productionController.closeProductionCall
+);
+
 module.exports = router;

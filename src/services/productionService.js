@@ -56,6 +56,98 @@ const getInspectionDefects = async (inspectionPointId) => {
 
 };
 
+const getReworkTakeInEngines = async () => {
+
+    return await productionRepository.getReworkTakeInEngines();
+
+};
+
+const getEngineTakeInDetails = async (
+    engineNo,
+    vrEngineNo
+) => {
+
+    return await productionRepository.getEngineTakeInDetails(
+        engineNo,
+        vrEngineNo
+    );
+
+};
+
+const engineTakeIn = async (
+    engineNo,
+    takeINStation
+) => {
+
+    return await productionRepository.engineTakeIn(
+        engineNo,
+        takeINStation
+    );
+
+};
+
+const getNonMesControlledMaterials = async (
+    stationId,
+    lineId
+) => {
+
+    return await productionRepository.getNonMesControlledMaterials(
+        stationId,
+        lineId
+    );
+
+};
+
+const createMaterialRequest = async (
+    partId,
+    stationId,
+    lineId,
+    planId
+) => {
+
+    return await productionRepository.createMaterialRequest(
+        partId,
+        stationId,
+        lineId,
+        planId
+    );
+
+};
+
+const getProductionCallLogs = async () => {
+
+    return await productionRepository.getProductionCallLogs();
+
+};
+
+const acknowledgeProductionCall = async (
+    rowId,
+    lineId,
+    stationId
+) => {
+
+    return await productionRepository.acknowledgeProductionCall(
+        rowId,
+        lineId,
+        stationId
+    );
+
+};
+
+const closeProductionCall = async (
+    rowId,
+    lineId,
+    stationId
+) => {
+
+    return await productionRepository.closeProductionCall(
+        rowId,
+        lineId,
+        stationId
+    );
+
+};
+
 module.exports = {
     getLatestTicketID,
     getTicketReasons,
@@ -64,5 +156,13 @@ module.exports = {
     getOpenProductionTickets,
     getTicketDetails,
     getInspectionPoint,
-    getInspectionDefects
+    getInspectionDefects,
+    getReworkTakeInEngines,
+    getEngineTakeInDetails,
+    engineTakeIn,
+    getNonMesControlledMaterials,
+    createMaterialRequest,
+    getProductionCallLogs,
+    acknowledgeProductionCall,
+    closeProductionCall
 };

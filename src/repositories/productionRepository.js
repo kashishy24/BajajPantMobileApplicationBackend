@@ -176,6 +176,416 @@ const getInspectionDefects = async (inspectionPointId) => {
     return result.recordset;
 };
 
+const getReworkTakeInEngines = async () => {
+
+    const request = new sql.Request();
+
+    const result = await request.query(`
+        SELECT
+            VREngineNo,
+            EngineNo,
+            PlanID,
+            SKUID,
+            LineID,
+            Status,
+            NotOkStation,
+            SAMarrigeStatus
+        FROM Prod_Engine_WIP
+        WHERE Status IN (13, 15, 17, 20, 22, 25, 27)
+        ORDER BY
+            EndTime DESC,
+            StartTime DESC
+    `);
+
+    return result.recordset;
+};
+
+const getEngineTakeInDetails = async (engineNo, vrEngineNo) => {
+
+    const request = new sql.Request();
+
+    request.input(
+        "EngineNo",
+        sql.NVarChar(14),
+        engineNo || null
+    );
+
+    request.input(
+        "VREngineNo",
+        sql.NVarChar(10),
+        vrEngineNo || null
+    );
+
+    const result = await request.query(`
+        SELECT
+            VREngineNo,
+            EngineNo,
+            LineID,
+            ReEntryStation,
+            Status,
+            StartTime,
+            EndTime,
+            PlanID,
+            SKUID,
+            KITID,
+            NotOkStation,
+            SAMarrigeStatus
+        FROM Prod_Engine_WIP
+        WHERE
+            (@EngineNo IS NOT NULL AND EngineNo = @EngineNo)
+            OR
+            (@VREngineNo IS NOT NULL AND VREngineNo = @VREngineNo)
+    `);
+
+    return result.recordset;
+};
+
+const engineTakeIn = async (
+    engineNo,
+    takeINStation
+) => {
+
+    const request = new sql.Request();
+
+    request.input(
+        "EngineNo",
+        sql.NVarChar(14),
+        engineNo
+    );
+
+    request.input(
+        "TakeINStation",
+        sql.Int,
+        takeINStation
+    );
+
+    const result = await request.query(`
+        UPDATE Prod_Engine_WIP
+        SET
+            ReEntryStation = @TakeINStation,
+            Status = 5
+        WHERE EngineNo = @EngineNo
+    `);
+
+    return result.recordsets[1];
+};
+
+const getNonMesControlledMaterials = async (
+    stationId,
+    lineId
+) => {
+
+    const request = new sql.Request();
+
+    request.input(
+        "StationID",
+        sql.Int,
+        stationId
+    );
+
+    request.input(
+        "LineID",
+        sql.Int,
+        lineId
+    );
+
+    const result = await request.query(`
+        SELECT
+            PP.PlanID,
+            PP.LineID,
+            BOM.StationID,
+            BOM.PartID,
+            BOM.PartDesc AS PartName
+        FROM Prod_Plan PP
+        INNER JOIN Config_BOM BOM
+            ON PP.SKUID = BOM.SKUID
+        WHERE PP.Status IN (2, 3)
+          AND PP.LineID = @LineID
+          AND BOM.StationID = @StationID
+          AND BOM.MesControlled = 2
+        ORDER BY
+            PP.PlanID,
+            BOM.PartID
+    `);
+
+    return result.recordset;
+};
+
+const createMaterialRequest = async (
+    partId,
+    stationId,
+    lineId,
+    planId
+) => {
+
+    const request = new sql.Request();
+
+    request.input(
+        "PartID",
+        sql.NVarChar(20),
+        partId
+    );
+
+    request.input(
+        "StationID",
+        sql.Int,
+        stationId
+    );
+
+    request.input(
+        "LineID",
+        sql.Int,
+        lineId
+    );
+
+    request.input(
+        "PlanID",
+        sql.Int,
+        planId
+    );
+
+    const result = await request.query(`
+
+        BEGIN TRANSACTION;
+
+        BEGIN TRY
+
+            /*
+               Check if request already exists
+            */
+            IF EXISTS (
+                SELECT 1
+                FROM Material_Running_Plan
+                WHERE PlanID = @PlanID
+                  AND PartID = @PartID
+                  AND MesControlled = 2
+            )
+            BEGIN
+
+                SELECT
+                    UID,
+                    PlanID,
+                    PartID,
+                    TotalRequiredQty,
+                    RequiredQty,
+                    ToBeIssuedQty,
+                    DeliveredQty,
+                    ConsumedQty,
+                    MesControlled,
+                    Status
+                FROM Material_Running_Plan
+                WHERE PlanID = @PlanID
+                  AND PartID = @PartID
+                  AND MesControlled = 2;
+
+            END
+            ELSE
+            BEGIN
+
+                INSERT INTO Material_Running_Plan
+                (
+                    PlanID,
+                    PartID,
+                    TotalRequiredQty,
+                    RequiredQty,
+                    ToBeIssuedQty,
+                    DeliveredQty,
+                    ConsumedQty,
+                    MesControlled,
+                    Status
+                )
+                VALUES
+                (
+                    @PlanID,
+                    @PartID,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    2,
+                    1
+                );
+
+
+                SELECT
+                    UID,
+                    PlanID,
+                    PartID,
+                    TotalRequiredQty,
+                    RequiredQty,
+                    ToBeIssuedQty,
+                    DeliveredQty,
+                    ConsumedQty,
+                    MesControlled,
+                    Status
+                FROM Material_Running_Plan
+                WHERE UID = SCOPE_IDENTITY();
+
+            END;
+
+
+            COMMIT TRANSACTION;
+
+        END TRY
+
+        BEGIN CATCH
+
+            IF @@TRANCOUNT > 0
+                ROLLBACK TRANSACTION;
+
+            THROW;
+
+        END CATCH;
+    `);
+
+    return result.recordset;
+};
+
+const getProductionCallLogs = async () => {
+
+    const result = await new sql.Request().query(`
+        SELECT
+            RowId,
+            ProdDate,
+            ProdShift,
+            LineID,
+            StationID,
+            StartTime,
+            AckTime,
+            EndTime,
+            CallStatus
+        FROM Prod_Call_Log
+        WHERE CallStatus IN (1, 2)
+        ORDER BY
+            StartTime DESC
+    `);
+
+    return result.recordset;
+};
+
+const acknowledgeProductionCall = async (
+    rowId,
+    lineId,
+    stationId
+) => {
+
+    const request = new sql.Request();
+
+    request.input(
+        "RowId",
+        sql.Int,
+        rowId
+    );
+
+    request.input(
+        "LineID",
+        sql.Int,
+        lineId
+    );
+
+    request.input(
+        "StationID",
+        sql.Int,
+        stationId
+    );
+
+    const result = await request.query(`
+
+        UPDATE Prod_Call_Log
+        SET
+            AckTime = GETDATE(),
+            CallStatus = 2
+        WHERE RowId = @RowId
+          AND LineID = @LineID
+          AND StationID = @StationID
+          AND CallStatus = 1;
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            THROW 50001,
+                'Production call not found or already acknowledged',
+                1;
+        END;
+
+        SELECT
+            RowId,
+            ProdDate,
+            ProdShift,
+            LineID,
+            StationID,
+            StartTime,
+            AckTime,
+            EndTime,
+            CallStatus
+        FROM Prod_Call_Log
+        WHERE RowId = @RowId;
+    `);
+
+    return result.recordset;
+};
+
+const closeProductionCall = async (
+    rowId,
+    lineId,
+    stationId
+) => {
+
+    const request = new sql.Request();
+
+    request.input(
+        "RowId",
+        sql.Int,
+        rowId
+    );
+
+    request.input(
+        "LineID",
+        sql.Int,
+        lineId
+    );
+
+    request.input(
+        "StationID",
+        sql.Int,
+        stationId
+    );
+
+    const result = await request.query(`
+
+        UPDATE Prod_Call_Log
+        SET
+            EndTime = GETDATE(),
+            CallStatus = 3
+        WHERE RowId = @RowId
+          AND LineID = @LineID
+          AND StationID = @StationID
+          AND CallStatus = 2;
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            THROW 50002,
+                'Production call not found or not acknowledged',
+                1;
+        END;
+
+        SELECT
+            RowId,
+            ProdDate,
+            ProdShift,
+            LineID,
+            StationID,
+            StartTime,
+            AckTime,
+            EndTime,
+            CallStatus
+        FROM Prod_Call_Log
+        WHERE RowId = @RowId;
+    `);
+
+    return result.recordset;
+};
+    
 module.exports = {
     getLatestTicketID,
     getTicketReasons,
@@ -184,5 +594,13 @@ module.exports = {
     getOpenProductionTickets,
     getTicketDetails,
     getInspectionPoint,
-    getInspectionDefects
+    getInspectionDefects,
+    getReworkTakeInEngines,
+    getEngineTakeInDetails,
+    engineTakeIn,
+    getNonMesControlledMaterials,
+    createMaterialRequest,
+    getProductionCallLogs,
+    acknowledgeProductionCall,
+    closeProductionCall
 };

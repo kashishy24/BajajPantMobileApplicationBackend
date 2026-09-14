@@ -233,6 +233,318 @@ const getInspectionDefects = async (req, res) => {
     }
 };
 
+const getReworkTakeInEngines = async (req, res) => {
+
+    try {
+
+        const data =
+            await productionService.getReworkTakeInEngines();
+
+        return successResponse(
+            res,
+            data,
+            "Rework Take IN Engines Fetched Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+const getEngineTakeInDetails = async (req, res) => {
+
+    try {
+
+        const {
+            engineNo,
+            vrEngineNo
+        } = req.query;
+
+        if (!engineNo && !vrEngineNo) {
+
+            return errorResponse(
+                res,
+                "EngineNo or VREngineNo is required"
+            );
+
+        }
+
+        const data =
+            await productionService.getEngineTakeInDetails(
+                engineNo,
+                vrEngineNo
+            );
+
+        return successResponse(
+            res,
+            data,
+            "Engine Details Fetched Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+const engineTakeIn = async (req, res) => {
+
+    try {
+
+        const {
+            engineNo,
+            takeINStation
+        } = req.body;
+
+        if (
+            !engineNo ||
+            takeINStation === undefined
+        ) {
+
+            return errorResponse(
+                res,
+                "EngineNo and TakeINStation are required"
+            );
+
+        }
+
+        const data =
+            await productionService.engineTakeIn(
+                engineNo,
+                takeINStation
+            );
+
+        return successResponse(
+            res,
+            "Engine Take IN Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+const getNonMesControlledMaterials = async (req, res) => {
+
+    try {
+
+        const {
+            stationId,
+            lineId
+        } = req.query;
+
+        if (
+            stationId === undefined ||
+            lineId === undefined
+        ) {
+
+            return errorResponse(
+                res,
+                "StationID and LineID are required"
+            );
+
+        }
+
+        const data =
+            await productionService.getNonMesControlledMaterials(
+                stationId,
+                lineId
+            );
+
+        return successResponse(
+            res,
+            data,
+            "Non-MES Controlled Materials Fetched Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+const createMaterialRequest = async (req, res) => {
+
+    try {
+
+        const {
+            partId,
+            stationId,
+            lineId,
+            planId
+        } = req.body;
+
+        if (
+            !partId ||
+            stationId === undefined ||
+            lineId === undefined ||
+            planId === undefined
+        ) {
+
+            return errorResponse(
+                res,
+                "PartID, StationID, LineID and PlanID are required"
+            );
+
+        }
+
+        const data =
+            await productionService.createMaterialRequest(
+                partId,
+                stationId,
+                lineId,
+                planId
+            );
+
+        return successResponse(
+            res,
+            data,
+            "Material Request Created Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+const getProductionCallLogs = async (req, res) => {
+
+    try {
+
+        const data =
+            await productionService.getProductionCallLogs();
+
+        return successResponse(
+            res,
+            data,
+            "Production Call Logs Fetched Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+const acknowledgeProductionCall = async (req, res) => {
+
+    try {
+
+        const {
+            rowId,
+            lineId,
+            stationId
+        } = req.body;
+
+        if (
+            rowId === undefined ||
+            lineId === undefined ||
+            stationId === undefined
+        ) {
+
+            return errorResponse(
+                res,
+                "RowID, LineID and StationID are required"
+            );
+
+        }
+
+        const data =
+            await productionService.acknowledgeProductionCall(
+                rowId,
+                lineId,
+                stationId
+            );
+
+        return successResponse(
+            res,
+            data,
+            "Production Call Acknowledged Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+const closeProductionCall = async (req, res) => {
+
+    try {
+
+        const {
+            rowId,
+            lineId,
+            stationId
+        } = req.body;
+
+        if (
+            rowId === undefined ||
+            lineId === undefined ||
+            stationId === undefined
+        ) {
+
+            return errorResponse(
+                res,
+                "RowID, LineID and StationID are required"
+            );
+
+        }
+
+        const data =
+            await productionService.closeProductionCall(
+                rowId,
+                lineId,
+                stationId
+            );
+
+        return successResponse(
+            res,
+            data,
+            "Production Call Closed Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
 module.exports = {
     getLatestTicketID,
     getTicketReasons,
@@ -241,5 +553,13 @@ module.exports = {
     getOpenProductionTickets,
     getTicketDetails,
     getInspectionPoint,
-    getInspectionDefects
+    getInspectionDefects,
+    getReworkTakeInEngines,
+    getEngineTakeInDetails,
+    engineTakeIn,
+    getNonMesControlledMaterials,
+    createMaterialRequest,
+    getProductionCallLogs,
+    acknowledgeProductionCall,
+    closeProductionCall
 };
