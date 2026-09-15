@@ -118,12 +118,13 @@ const getWaitingForApprovalIQCAuditHistory = async (req, res) => {
 };
 
 // Get Executed IQC Checkpoint Details acc to DocumentID, AuditListID, PartID, AuditInstanceID, SampleLevel, SampleNo
+// Get Executed IQC Checkpoint Details according to
+// DocumentID, AuditListID, AuditInstanceID, SampleLevel, SampleNo
 const getExecutedIQCCheckpoint = async (req, res) => {
   try {
     const {
       documentId,
       auditListId,
-      partId,
       auditInstanceId,
       sampleLevel,
       sampleNo
@@ -136,10 +137,6 @@ const getExecutedIQCCheckpoint = async (req, res) => {
 
     if (!auditListId) {
       return errorResponse(res, "AuditListID is required", 400);
-    }
-
-    if (!partId) {
-      return errorResponse(res, "PartID is required", 400);
     }
 
     if (!auditInstanceId) {
@@ -156,11 +153,26 @@ const getExecutedIQCCheckpoint = async (req, res) => {
 
     const documentID = parseInt(documentId);
     const auditListID = parseInt(auditListId);
-    const partID = parseInt(partId);
     const auditInstanceID = parseInt(auditInstanceId);
     const sampleLevelValue = parseInt(sampleLevel);
     const sampleNoValue = parseInt(sampleNo);
 
+    // Validate numeric values
+    if (
+      isNaN(documentID) ||
+      isNaN(auditListID) ||
+      isNaN(auditInstanceID) ||
+      isNaN(sampleLevelValue) ||
+      isNaN(sampleNoValue)
+    ) {
+      return errorResponse(
+        res,
+        "All parameters must contain valid numeric values",
+        400
+      );
+    }
+
+    // Validate DocumentID
     if (![1, 2].includes(documentID)) {
       return errorResponse(
         res,
@@ -181,12 +193,6 @@ const getExecutedIQCCheckpoint = async (req, res) => {
       "AuditListID",
       sql.Int,
       auditListID
-    );
-
-    request.input(
-      "PartID",
-      sql.NVarChar(50),
-      partID
     );
 
     request.input(
@@ -650,39 +656,78 @@ const approveIQCAudit = async (req, res) => {
   try {
     const {
       AuditListID,
+      PartID,
       AuditInstanceID,
       ApprovedBy,
       ApprovedByRemark
     } = req.body;
+
+    // Validation
+    if (
+      AuditListID === undefined ||
+      AuditListID === null ||
+      AuditListID === ""
+    ) {
+      return errorResponse(res, "AuditListID is required", 400);
+    }
+
+    if (
+      PartID === undefined ||
+      PartID === null ||
+      String(PartID).trim() === ""
+    ) {
+      return errorResponse(res, "PartID is required", 400);
+    }
+
+    if (
+      AuditInstanceID === undefined ||
+      AuditInstanceID === null ||
+      AuditInstanceID === ""
+    ) {
+      return errorResponse(res, "AuditInstanceID is required", 400);
+    }
+
+    const auditListID = parseInt(AuditListID);
+    const auditInstanceID = parseInt(AuditInstanceID);
+
+    if (isNaN(auditListID)) {
+      return errorResponse(res, "Invalid AuditListID", 400);
+    }
+
+    if (isNaN(auditInstanceID)) {
+      return errorResponse(res, "Invalid AuditInstanceID", 400);
+    }
 
     const request = new sql.Request();
 
     request.input(
       "AuditListID",
       sql.Int,
-      AuditListID !== undefined && AuditListID !== null
-        ? parseInt(AuditListID)
-        : null
+      auditListID
+    );
+
+    request.input(
+      "PartID",
+      sql.NVarChar(50),
+      String(PartID).trim()
     );
 
     request.input(
       "AuditInstanceID",
       sql.BigInt,
-      AuditInstanceID !== undefined && AuditInstanceID !== null
-        ? parseInt(AuditInstanceID)
-        : null
+      auditInstanceID
     );
 
     request.input(
       "ApprovedBy",
       sql.NVarChar(100),
-      ApprovedBy || null
+      ApprovedBy ? String(ApprovedBy).trim() : null
     );
 
     request.input(
       "ApprovedByRemark",
       sql.NVarChar(500),
-      ApprovedByRemark || null
+      ApprovedByRemark ? String(ApprovedByRemark).trim() : null
     );
 
     const result = await request.execute(

@@ -7,6 +7,7 @@ const authRoutes = require("./src/routes/authRoutes");
 const ediRoutes = require("./src/routes/ediRoutes");
 const iqcRoutes = require("./src/routes/IQCRoutes");
 const ipqcRoutes = require("./src/routes/ipqcRoutes");
+const fqcRoutes = require("./src/routes/FQCRoutes");
 const materialStoreRoutes = require("./src/routes/materialStoreRoutes");
 const ticketRoutes = require("./src/routes/ticketRoutes");
 
@@ -18,7 +19,7 @@ const { connectDB } = require("./src/config/db");
 const limiter = rateLimit({
   //set up transaction rate limiter
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 5000,
 });
 
 const app = express();
@@ -36,6 +37,7 @@ app.use("/api/login", authRoutes);
 app.use("/api/edi", ediRoutes);
 app.use("/api/iqc", iqcRoutes);
 app.use("/api/ipqc", ipqcRoutes);
+app.use("/api/fqc", fqcRoutes);
 app.use("/api/material-store", materialStoreRoutes);
 app.use("/api/tickets", ticketRoutes);
 
