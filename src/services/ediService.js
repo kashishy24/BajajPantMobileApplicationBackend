@@ -36,6 +36,40 @@ const getPartDetails = async (
     );
 };
 
+const storeMaterial = async (
+    ediNumber,
+    userId,
+    parts
+) => {
+
+    if (!ediNumber) {
+        throw new Error("EDI Number is required");
+    }
+
+    if (!userId) {
+        throw new Error("User ID is required");
+    }
+
+    if (!parts || !Array.isArray(parts) || parts.length === 0) {
+        throw new Error("Parts are required");
+    }
+
+    const result = [];
+
+    for (const part of parts) {
+
+        const data = await ediRepository.storeMaterial(
+            ediNumber,
+            part.partId,
+            userId
+        );
+
+        result.push(data);
+    }
+
+    return result;
+};
+
 const confirmIQC = async (data) => {
 
     const {
@@ -80,6 +114,17 @@ const validateQuantity = async (data) => {
         receivedQty,
         userId,
         remark
+    );
+};
+
+const getMaterialStatus = async (partID) => {
+
+    if (!partID) {
+        throw new Error("PartID is required");
+    }
+
+    return await ediRepository.getMaterialStatus(
+        partID
     );
 };
 
@@ -333,8 +378,10 @@ module.exports = {
     getEDIList,
     getEDIDetails,
     getPartDetails,
+    storeMaterial,
     confirmIQC,
     validateQuantity,
+    getMaterialStatus,
     getValidatedMaterials,
     bypassMaterial,
     sampleCollection,

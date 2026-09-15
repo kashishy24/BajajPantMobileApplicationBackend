@@ -10,7 +10,7 @@ const ipqcRoutes = require("./src/routes/ipqcRoutes");
 const fqcRoutes = require("./src/routes/FQCRoutes");
 const materialStoreRoutes = require("./src/routes/materialStoreRoutes");
 const ticketRoutes = require("./src/routes/ticketRoutes");
-
+const productionRoutes = require("./src/routes/productionRoutes");
 
 
 const { connectDB } = require("./src/config/db");
@@ -29,7 +29,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
-app.use(limiter);
+app.use(limiter)
 app.use(express.json());
 
 
@@ -40,6 +40,7 @@ app.use("/api/ipqc", ipqcRoutes);
 app.use("/api/fqc", fqcRoutes);
 app.use("/api/material-store", materialStoreRoutes);
 app.use("/api/tickets", ticketRoutes);
+app.use("/api/productionSupervisor", productionRoutes);
 
 const PORT = process.env.PORT || 5000;
 

@@ -1,5 +1,6 @@
 const materialStoreService = require("../services/materialStoreService");
 
+
 const {
     successResponse,
     errorResponse
@@ -179,6 +180,187 @@ const moveMaterialToStore = async (req, res) => {
 
 };
 
+const getMaterialRejectedList = async (req, res) => {
+
+    try {
+
+        const data = await materialStoreService.getMaterialRejectedList();
+
+        return successResponse(
+            res,
+            data,
+            "Rejected Material Data Fetched Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+const getRunningProductionPlans = async (req, res) => {
+
+    try {
+
+        const data = await materialStoreService.getRunningProductionPlans();
+
+        return successResponse(
+            res,
+            data,
+            "Running Production Plan Fetched Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+
+};
+
+const getMaterialRequestList = async (req, res) => {
+
+    try {
+
+        const data = await materialStoreService.getMaterialRequestList();
+
+        return successResponse(
+            res,
+            data,
+            "Material Request Data Fetched Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+
+};
+
+const getMaterialAlertList = async (req, res) => {
+    try {
+        const data = await materialStoreService.getMaterialAlertList();
+
+        return successResponse(
+            res,
+            data,
+            "Material Alert Data Fetched Successfully"
+        );
+    } catch (error) {
+        return errorResponse(res, error.message);
+    }
+};
+
+const issueMaterial = async (req, res) => {
+    try {
+        const { planId, partId, requiredQty } = req.body;
+
+        if (!planId || !partId || requiredQty === undefined) {
+            return errorResponse(
+                res,
+                "PlanID, PartID and RequiredQty are required."
+            );
+        }
+
+        const data = await materialStoreService.issueMaterial(
+            planId,
+            partId,
+            requiredQty
+        );
+
+        return successResponse(
+            res,
+            data,
+            "Material Issued Successfully"
+        );
+    } catch (error) {
+        return errorResponse(res, error.message);
+    }
+};
+
+const getMaterialDeliverList = async (req, res) => {
+    try {
+        const data = await materialStoreService.getMaterialDeliverList();
+
+        return successResponse(
+            res,
+            data,
+            "Material Deliver List Fetched Successfully"
+        );
+    } catch (error) {
+        return errorResponse(res, error.message);
+    }
+};
+
+const deliverMaterial = async (req, res) => {
+
+    try {
+
+        const {
+            planId,
+            partId,
+            deliveredQty,
+            materialMoveType
+        } = req.body;
+
+        if (
+            planId === undefined ||
+            !partId ||
+            deliveredQty === undefined ||
+            materialMoveType === undefined
+        ) {
+
+            return errorResponse(
+                res,
+                "PlanID, PartID, DeliveredQty and MaterialMoveType are required."
+            );
+
+        }
+
+                // 0 is allowed
+        if (Number(deliveredQty) < 0) {
+
+            return errorResponse(
+                res,
+                "DeliveredQty cannot be negative."
+            );
+
+        }
+
+        const data =
+            await materialStoreService.deliverMaterial(
+                planId,
+                partId,
+                deliveredQty,
+                materialMoveType
+            );
+
+        return successResponse(
+            res,
+            data,
+            "Material Delivered Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
 
 module.exports = {
     getMaterialStoreList,
@@ -187,5 +369,12 @@ module.exports = {
     getSubAssemblyLines,
     getSubAssemblyDetails,
     getLineSideMaterial,
-    moveMaterialToStore
+    moveMaterialToStore,
+    getMaterialRejectedList,
+    getRunningProductionPlans,
+    getMaterialRequestList,
+    getMaterialAlertList,
+    issueMaterial,
+    getMaterialDeliverList,
+    deliverMaterial
 };
