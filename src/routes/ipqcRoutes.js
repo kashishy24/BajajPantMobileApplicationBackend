@@ -6,16 +6,9 @@ const IPQCHome =require("../controllers/TabAPI/Operator/IPQC/IPQCHome");
 
 //Operator Login
 
-router.get("/getDocListByGroup", IPQCHome.getDocListByGroup);
+//Monitoring Screen
 router.get("/getScheduleAuditList", IPQCHome.getScheduleAuditList);
 router.post("/executeIPQCAudit", IPQCHome.executeIPQCAudit);
-router.get("/getIPQCExecutionDetails", IPQCHome.getIPQCExecutionDetails);
-router.post("/saveIPQCCheckpointResult", IPQCHome.saveIPQCCheckpointResult);
-router.post("/submitIPQCAudit", IPQCHome.submitIPQCAudit);
-router.get("/getExecutedIPQCAuditList", IPQCHome.getExecutedIPQCAuditList);
-router.get("/getExecutedIPQCAuditPoints", IPQCHome.getExecutedIPQCAuditPoints);
-router.post("/getPendingIPQCAuditApproval", IPQCHome.getPendingIPQCAuditApproval);
-router.post("/approveIPQCAudit", IPQCHome.approveIPQCAudit);
-router.post("/updateIPQCHistoryCheckpointResult", IPQCHome.updateIPQCHistoryCheckpointResult);
+
 
 module.exports = router;
