@@ -4177,7 +4177,6 @@ const confirmAuditList = async (
 
         await transaction.begin();
 
-
         // ==================================================
         // 1. Get User
         // ==================================================
@@ -4338,7 +4337,7 @@ const confirmAuditList = async (
                     PartID,
                     BatchID,
                     VendorID,
-                    IncomingQty,
+                    Quantity,
                     ValidatedQty
                 FROM Material_Receiving
                 WHERE
@@ -4430,7 +4429,7 @@ const confirmAuditList = async (
                 HoldQty = @HoldQty,
                 RejectedQty = @RejectedQty,
                 SampleLevel = @SampleLevel,
-                SampleSize = @SampleSize,
+                SampleQTY = @SampleSize,
                 Status = @Status,
                 ValidatedBy = @ValidatedBy,
                 TimeStamp = GETDATE()
@@ -4449,7 +4448,7 @@ const confirmAuditList = async (
 
         genealogyRequest.input(
             "EDINumber",
-            sql.NVarChar,
+            sql.NVarChar(20),
             ediNumber
         );
 
@@ -4574,55 +4573,113 @@ const confirmAuditList = async (
         // ==================================================
         // 9. Move Execute Checkpoints to History
         // ==================================================
-
+        
         if (historyTable) {
-
+        
+            // ----------------------------------------------
+            // Get non-identity columns from execute table
+            // ----------------------------------------------
+        
+            const columnRequest =
+                new sql.Request(transaction);
+        
+            columnRequest.input(
+                "ExecuteTable",
+                sql.NVarChar,
+                executeTable
+            );
+        
+            const columnResult =
+                await columnRequest.query(`
+                    SELECT COLUMN_NAME
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_NAME = @ExecuteTable
+                      AND COLUMNPROPERTY(
+                            OBJECT_ID(
+                                TABLE_SCHEMA + '.' + TABLE_NAME
+                            ),
+                            COLUMN_NAME,
+                            'IsIdentity'
+                          ) = 0
+                    ORDER BY ORDINAL_POSITION
+                `);
+        
+            if (columnResult.recordset.length === 0) {
+                throw new Error(
+                    `No columns found for execute table ${executeTable}`
+                );
+            }
+        
+            const columns =
+                columnResult.recordset
+                    .map(row => `[${row.COLUMN_NAME}]`)
+                    .join(", ");
+        
+            console.log(
+                "History Insert Columns:",
+                columns
+            );
+        
+        
+            // ----------------------------------------------
+            // Insert into history
+            // ----------------------------------------------
+        
             const historyRequest =
                 new sql.Request(transaction);
-
+        
             historyRequest.input(
                 "AuditListID",
                 sql.Int,
                 auditListID
             );
-
+        
             historyRequest.input(
                 "AuditInstanceID",
                 sql.Int,
                 auditInstanceID
             );
-
+        
             await historyRequest.query(`
                 INSERT INTO ${historyTable}
-                SELECT *
+                (
+                    ${columns}
+                )
+                SELECT
+                    ${columns}
                 FROM ${executeTable}
                 WHERE
                     AuditListID = @AuditListID
                     AND AuditInstanceID = @AuditInstanceID
             `);
-
-
+        
+        
+            // ----------------------------------------------
+            // Delete execute records
+            // ----------------------------------------------
+        
             const deleteRequest =
                 new sql.Request(transaction);
-
+        
             deleteRequest.input(
                 "AuditListID",
                 sql.Int,
                 auditListID
             );
-
+        
             deleteRequest.input(
                 "AuditInstanceID",
                 sql.Int,
                 auditInstanceID
             );
-
+        
             await deleteRequest.query(`
                 DELETE FROM ${executeTable}
                 WHERE
                     AuditListID = @AuditListID
                     AND AuditInstanceID = @AuditInstanceID
             `);
+        
         }
 
         // ==================================================
@@ -4694,7 +4751,7 @@ const confirmAuditList = async (
         await updateAuditRequest.query(`
             UPDATE QA_Execute_IQC_AuditList
             SET
-                ExecutionEndTime = GETDATE(),
+                ExecutedEndTime = GETDATE(),
                 ExecutedBy = @ExecutedBy,
                 ExecutedByRemark = @ExecutedByRemark,
                 Status = @Status,
@@ -4710,62 +4767,106 @@ const confirmAuditList = async (
         // ==================================================
         // 11. Move Audit List to History
         // ==================================================
-
+        
         const auditHistoryRequest =
             new sql.Request(transaction);
-
+        
         auditHistoryRequest.input(
             "AuditListID",
             sql.Int,
             auditListID
         );
-
+        
         auditHistoryRequest.input(
             "AuditInstanceID",
             sql.Int,
             auditInstanceID
         );
-
+        
         auditHistoryRequest.input(
             "BatchID",
             sql.NVarChar,
             batchId
         );
-
+        
+        // ==================================================
+        // Get non-identity columns
+        // ==================================================
+        
+        const auditColumnRequest =
+            new sql.Request(transaction);
+        
+        const auditColumnResult =
+            await auditColumnRequest.query(`
+                SELECT COLUMN_NAME
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_NAME = 'QA_Execute_IQC_AuditList'
+                  AND COLUMNPROPERTY(
+                        OBJECT_ID(
+                            TABLE_SCHEMA + '.' + TABLE_NAME
+                        ),
+                        COLUMN_NAME,
+                        'IsIdentity'
+                      ) = 0
+                ORDER BY ORDINAL_POSITION
+            `);
+        
+        if (auditColumnResult.recordset.length === 0) {
+            throw new Error(
+                "No columns found in QA_Execute_IQC_AuditList"
+            );
+        }
+        
+        const auditColumns =
+            auditColumnResult.recordset
+                .map(row => `[${row.COLUMN_NAME}]`)
+                .join(", ");
+        
+        
+        // ==================================================
+        // Insert into History
+        // ==================================================
+        
         await auditHistoryRequest.query(`
             INSERT INTO QA_Execute_IQC_AuditList_History
-            SELECT *
+            (
+                ${auditColumns}
+            )
+            SELECT
+                ${auditColumns}
             FROM QA_Execute_IQC_AuditList
             WHERE
                 AuditListID = @AuditListID
                 AND AuditInstanceID = @AuditInstanceID
                 AND BatchID = @BatchID
         `);
-
-
+        
+        
+        // ==================================================
         // Delete active audit list
-
+        // ==================================================
+        
         const deleteAuditRequest =
             new sql.Request(transaction);
-
+        
         deleteAuditRequest.input(
             "AuditListID",
             sql.Int,
             auditListID
         );
-
+        
         deleteAuditRequest.input(
             "AuditInstanceID",
             sql.Int,
             auditInstanceID
         );
-
+        
         deleteAuditRequest.input(
             "BatchID",
             sql.NVarChar,
             batchId
         );
-
+        
         await deleteAuditRequest.query(`
             DELETE FROM QA_Execute_IQC_AuditList
             WHERE
@@ -4773,6 +4874,7 @@ const confirmAuditList = async (
                 AND AuditInstanceID = @AuditInstanceID
                 AND BatchID = @BatchID
         `);
+        
 
         // ==================================================
         // 12. Update Material Stock
@@ -4812,6 +4914,8 @@ const confirmAuditList = async (
         // ==================================================
         // Get EnginePartID from Config_PartVariant
         // ==================================================
+
+        console.log("========== STEP 13 START ==========");
         
         const variantRequest =
             new sql.Request(transaction);
@@ -4949,6 +5053,13 @@ const confirmAuditList = async (
             enginePartID
         );
 
+        batchRequest.input(
+            "RunningBatch",
+            sql.Int,
+            0
+        );
+
+
         await batchRequest.query(`
             INSERT INTO Material_BatchWiseQty
             (
@@ -4962,7 +5073,8 @@ const confirmAuditList = async (
                 Used,
                 Moved,
                 Rejected,
-                Status
+                Status,
+                RunningBatch
             )
             VALUES
             (
@@ -4976,11 +5088,12 @@ const confirmAuditList = async (
                 @Used,
                 @Moved,
                 @Rejected,
-                @Status
+                @Status,
+                @RunningBatch
             )
         `);
 
-                await transaction.commit();
+            await transaction.commit();
 
         return {
             success: true,

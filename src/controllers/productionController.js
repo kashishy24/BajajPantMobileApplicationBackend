@@ -113,6 +113,80 @@ const getDepartments = async (req, res) => {
     }
 };
 
+const notifySubmit = async (req, res) => {
+    try {
+        const {
+            lineId,
+            stationId,
+            activityId,
+            partId,
+            equipmentId,
+            breakdownId,
+            engineNo,
+            userId,
+            reasonId,
+            remark,
+            expectedClosure,
+            actionBy,
+            role
+        } = req.body;
+
+        if (!lineId) {
+            return errorResponse(res, "LineID is required");
+        }
+
+        if (!stationId) {
+            return errorResponse(res, "StationID is required");
+        }
+
+        if (!userId) {
+            return errorResponse(res, "UserID is required");
+        }
+
+        if (!reasonId) {
+            return errorResponse(res, "ReasonID is required");
+        }
+
+        if (!actionBy) {
+            return errorResponse(res, "ActionBy is required");
+        }
+
+        if (!role) {
+            return errorResponse(res, "Role is required");
+        }
+
+        const result = await productionService.notifySubmit({
+            lineId,
+            stationId,
+            activityId,
+            partId,
+            equipmentId,
+            breakdownId,
+            engineNo,
+            userId,
+            reasonId,
+            remark,
+            expectedClosure,
+            actionBy,
+            role
+        });
+
+        return successResponse(
+            res,
+            result,
+            "Ticket notification submitted successfully"
+        );
+
+    } catch (error) {
+        console.error("Notify Submit Error:", error);
+
+        return errorResponse(
+            res,
+            error.message || "Failed to submit ticket notification"
+        );
+    }
+};
+
 const getOpenProductionTickets = async (req, res) => {
 
     try {
@@ -231,6 +305,180 @@ const getInspectionDefects = async (req, res) => {
         );
 
     }
+};
+
+const confirmEngineInspection = async (req, res) => {
+
+    try {
+
+        const {
+            ticketId,
+            auditGroup,
+            holdType,
+            partId,
+            planId,
+            forwardQty,
+            backwordQty,
+            inspectionDetails,
+            userId
+        } = req.body;
+
+
+        // Basic validation
+        if (
+            ticketId === undefined ||
+            auditGroup === undefined ||
+            holdType === undefined ||
+            userId === undefined
+        ) {
+            return errorResponse(
+                res,
+                "TicketID, AuditGroup, HoldType and UserID are required"
+            );
+        }
+
+
+        // Validate inspection details
+        if (
+            !Array.isArray(inspectionDetails) ||
+            inspectionDetails.length === 0
+        ) {
+            return errorResponse(
+                res,
+                "InspectionDetails are required"
+            );
+        }
+
+
+        // Validate every inspection detail
+        for (const detail of inspectionDetails) {
+
+            if (
+                detail.inspectionPointId === undefined ||
+                detail.inspectionDefectId === undefined
+            ) {
+                return errorResponse(
+                    res,
+                    "InspectionPointID and InspectionDefectID are required for every inspection detail"
+                );
+            }
+
+        }
+
+
+        // Validate HoldType
+        if (![1, 2, 3].includes(Number(holdType))) {
+
+            return errorResponse(
+                res,
+                "Invalid HoldType. Allowed values are 1-Engine, 2-Batch, 3-Plan"
+            );
+
+        }
+
+
+        // Engine Hold
+        if (Number(holdType) === 1) {
+
+            if (
+                forwardQty === undefined ||
+                backwordQty === undefined
+            ) {
+                return errorResponse(
+                    res,
+                    "ForwardQty and BackwordQty are required for Engine Hold"
+                );
+            }
+
+
+            if (
+                Number(forwardQty) < 0 ||
+                Number(backwordQty) < 0
+            ) {
+                return errorResponse(
+                    res,
+                    "ForwardQty and BackwordQty cannot be negative"
+                );
+            }
+
+        }
+
+
+        // Batch Hold
+        if (
+            Number(holdType) === 2 &&
+            !partId
+        ) {
+
+            return errorResponse(
+                res,
+                "PartID is required for Batch Hold"
+            );
+
+        }
+
+
+        // Plan Hold
+        if (
+            Number(holdType) === 3 &&
+            planId === undefined
+        ) {
+
+            return errorResponse(
+                res,
+                "PlanID is required for Plan Hold"
+            );
+
+        }
+
+
+        const data =
+            await productionService.confirmEngineInspection({
+
+                ticketId,
+                auditGroup,
+                holdType,
+
+                partId:
+                    partId || null,
+
+                planId:
+                    planId === undefined
+                        ? null
+                        : planId,
+
+                forwardQty:
+                    forwardQty === undefined
+                        ? 0
+                        : forwardQty,
+
+                backwordQty:
+                    backwordQty === undefined
+                        ? 0
+                        : backwordQty,
+
+                inspectionDetails,
+
+                userId
+            });
+
+
+        return successResponse(
+            res,
+            data,
+            "Engine Inspection Confirmed Successfully"
+        );
+
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+
 };
 
 const getReworkTakeInEngines = async (req, res) => {
@@ -550,10 +798,12 @@ module.exports = {
     getTicketReasons,
     getTicketReasonRequiredFields,
     getDepartments,
+    notifySubmit,
     getOpenProductionTickets,
     getTicketDetails,
     getInspectionPoint,
     getInspectionDefects,
+    confirmEngineInspection,
     getReworkTakeInEngines,
     getEngineTakeInDetails,
     engineTakeIn,
