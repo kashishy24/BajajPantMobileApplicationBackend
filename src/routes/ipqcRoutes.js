@@ -9,6 +9,7 @@ const IPQCHome =require("../controllers/TabAPI/Operator/IPQC/IPQCHome");
 //Monitoring Screen
 router.get("/getScheduleAuditList", IPQCHome.getScheduleAuditList);
 router.post("/executeIPQCAudit", IPQCHome.executeIPQCAudit);
+router.get("/getIPQCAuditPointsForExecute", IPQCHome.getIPQCAuditPointsForExecute);
 
 
 module.exports = router;

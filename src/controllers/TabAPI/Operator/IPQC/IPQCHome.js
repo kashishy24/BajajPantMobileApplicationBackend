@@ -89,7 +89,61 @@ const executeIPQCAudit = async (req, res) => {
     );
   }
 };
+
+// Checkpoint Execution Screen 
+
+const getIPQCAuditPointsForExecute = async (req, res) => {
+  try {
+    const {
+      AuditListID,
+      AuditInstanceID
+    } = req.query;
+
+    // Validation
+    if (AuditListID === undefined || AuditInstanceID === undefined) {
+      return errorResponse(
+        res,
+        "AuditListID and AuditInstanceID are required",
+        400
+      );
+    }
+
+    const request = new sql.Request();
+
+    const result = await request
+      .input(
+        "AuditListID",
+        sql.Int,
+        parseInt(AuditListID)
+      )
+      .input(
+        "AuditInstanceID",
+        sql.Int,
+        parseInt(AuditInstanceID)
+      )
+      .execute("Tab_Q_IPQC_AuditPoints_ForExecute");
+
+    return successResponse(
+      res,
+      result.recordset,
+      "IPQC executed audit points fetched successfully"
+    );
+
+  } catch (error) {
+    console.error(
+      "Error fetching IPQC executed audit points:",
+      error
+    );
+
+    return errorResponse(
+      res,
+      error.message,
+      500
+    );
+  }
+};
 module.exports = {
   getScheduleAuditList,
-  executeIPQCAudit
+  executeIPQCAudit,
+  getIPQCAuditPointsForExecute
 };    
