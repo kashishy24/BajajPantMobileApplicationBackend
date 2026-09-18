@@ -23,6 +23,11 @@ router.get(
     productionController.getDepartments
 );
 
+router.post(
+    "/notify-submit",
+    productionController.notifySubmit
+);
+
 router.get(
     "/open-tickets",
     productionController.getOpenProductionTickets
@@ -41,6 +46,11 @@ router.get(
 router.get(
     "/inspection-points/:inspectionPointId/defects",
     productionController.getInspectionDefects
+);
+
+router.post(
+    "/engine-inspection/confirm",
+    productionController.confirmEngineInspection
 );
 
 // =====================================================

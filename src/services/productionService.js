@@ -30,6 +30,39 @@ const getDepartments = async () => {
 
 };
 
+const notifySubmit = async ({
+    lineId,
+    stationId,
+    activityId,
+    partId,
+    equipmentId,
+    breakdownId,
+    engineNo,
+    userId,
+    reasonId,
+    remark,
+    expectedClosure,
+    actionBy,
+    role
+}) => {
+
+    return await productionRepository.notifySubmit({
+        lineId,
+        stationId,
+        activityId,
+        partId,
+        equipmentId,
+        breakdownId,
+        engineNo,
+        userId,
+        reasonId,
+        remark,
+        expectedClosure,
+        actionBy,
+        role
+    });
+};
+
 const getOpenProductionTickets = async () => {
 
     return await productionRepository.getOpenProductionTickets();
@@ -52,6 +85,14 @@ const getInspectionDefects = async (inspectionPointId) => {
 
     return await productionRepository.getInspectionDefects(
         inspectionPointId
+    );
+
+};
+
+const confirmEngineInspection = async (data) => {
+
+    return await productionRepository.confirmEngineInspection(
+        data
     );
 
 };
@@ -153,10 +194,12 @@ module.exports = {
     getTicketReasons,
     getTicketReasonRequiredFields,
     getDepartments,
+    notifySubmit,
     getOpenProductionTickets,
     getTicketDetails,
     getInspectionPoint,
     getInspectionDefects,
+    confirmEngineInspection,
     getReworkTakeInEngines,
     getEngineTakeInDetails,
     engineTakeIn,

@@ -15,6 +15,7 @@ const getTicketReasons = async () => {
     const result = await new sql.Request().query(`
         SELECT
             TR.UID,
+            TR.ReasonName,
             TR.DepartmentID,
             D.DepartmentName,
             TR.Priority
@@ -66,6 +67,257 @@ const getDepartments = async () => {
     `);
 
     return result.recordset;
+};
+
+const notifySubmit = async ({
+    lineId,
+    stationId,
+    activityId,
+    partId,
+    equipmentId,
+    breakdownId,
+    engineNo,
+    userId,
+    reasonId,
+    remark,
+    expectedClosure,
+    actionBy,
+    role
+}) => {
+
+    const request = new sql.Request();
+
+    request.input("LineID", sql.Int, lineId);
+    request.input("StationID", sql.Int, stationId);
+    request.input("ActivityID", sql.Int, activityId ?? null);
+    request.input("PartID", sql.NVarChar(20), partId ?? null);
+    request.input("EquipmentID", sql.Int, equipmentId ?? null);
+    request.input("BreakdownID", sql.Int, breakdownId ?? null);
+    request.input("EngineNo", sql.NVarChar(14), engineNo ?? null);
+    request.input("UserID", sql.NVarChar(50), userId);
+    request.input("ReasonID", sql.Int, reasonId);
+    request.input("Remark", sql.NVarChar(sql.MAX), remark ?? null);
+    request.input("ExpectedClosure", sql.Date, expectedClosure ?? null);
+    request.input("ActionBy", sql.NVarChar(50), actionBy);
+    request.input("Role", sql.NVarChar(50), role);
+
+    const result = await request.query(`
+        SET NOCOUNT ON;
+
+        BEGIN TRY
+
+            BEGIN TRANSACTION;
+
+            DECLARE @TicketID INT;
+            DECLARE @ReasonName NVARCHAR(100);
+            DECLARE @DepartmentID INT;
+            DECLARE @DepartmentName NVARCHAR(100);
+
+            /* =====================================================
+               1. Get User Department
+               ===================================================== */
+
+            SELECT TOP 1
+                @DepartmentID = U.DepartmentID
+            FROM Config_User U
+            WHERE U.UserID = @UserID;
+
+            IF @DepartmentID IS NULL
+            BEGIN
+                THROW 50001, 'User not found or DepartmentID not configured', 1;
+            END;
+
+
+            /* =====================================================
+               2. Get Department Name
+               ===================================================== */
+
+            SELECT TOP 1
+                @DepartmentName = D.DepartmentName
+            FROM Config_Department D
+            WHERE D.DepartmentID = @DepartmentID;
+
+            IF @DepartmentName IS NULL
+            BEGIN
+                THROW 50002, 'Department not found for UserID', 1;
+            END;
+
+
+            /* =====================================================
+               3. Get Reason Name
+               ===================================================== */
+
+            SELECT TOP 1
+                @ReasonName = ReasonName
+            FROM Config_TicketReason
+            WHERE UID = @ReasonID;
+
+            IF @ReasonName IS NULL
+            BEGIN
+                THROW 50003, 'Reason not found for ReasonID', 1;
+            END;
+
+
+            /* =====================================================
+               4. Generate New TicketID
+               ===================================================== */
+
+            SELECT
+                @TicketID = ISNULL(MAX(TicketID), 0) + 1
+            FROM TicketManagement;
+
+
+            /* =====================================================
+               5. Insert TicketManagement
+               ===================================================== */
+
+            INSERT INTO TicketManagement
+            (
+                TicketID,
+                TimeStamp,
+                LineID,
+                StationID,
+                ActivityID,
+                PartID,
+                EquipmentID,
+                BreakdownID,
+                EngineNo,
+                RaiseBy,
+                Reason,
+                ActionBy,
+                Remark,
+                TrackingSeqNo,
+                ExpectedClosure,
+                TicketStatus
+            )
+            VALUES
+            (
+                @TicketID,
+                GETDATE(),
+                @LineID,
+                @StationID,
+                @ActivityID,
+                @PartID,
+                @EquipmentID,
+                @BreakdownID,
+                @EngineNo,
+                @DepartmentName,
+                @ReasonName,
+                @ActionBy,
+                @Remark,
+                1,
+                @ExpectedClosure,
+                1
+            );
+
+
+            /* =====================================================
+               6. Insert NotificationManagement
+               ===================================================== */
+
+            INSERT INTO NotificationManagement
+            (
+                NotificationDesc,
+                TimeStamp,
+                RaiseBy,
+                Category,
+                LineID,
+                StationID,
+                Role,
+                Status
+            )
+            VALUES
+            (
+                @ReasonName,
+                GETDATE(),
+                @UserID,
+                @ActionBy,
+                @LineID,
+                @StationID,
+                @Role,
+                1
+            );
+
+
+            /* =====================================================
+               7. Return Created Ticket
+               ===================================================== */
+
+            SELECT
+                UID,
+                TicketID,
+                TimeStamp,
+                LineID,
+                StationID,
+                ActivityID,
+                PartID,
+                EquipmentID,
+                BreakdownID,
+                EngineNo,
+                RaiseBy,
+                Reason,
+                ActionBy,
+                Remark,
+                TrackingSeqNo,
+                ExpectedClosure,
+                TicketStatus
+            FROM TicketManagement
+            WHERE TicketID = @TicketID;
+
+
+            /* =====================================================
+               8. Return Created Notification
+               ===================================================== */
+
+            SELECT TOP 1
+                NotificationID,
+                NotificationDesc,
+                TimeStamp,
+                RaiseBy,
+                Category,
+                LineID,
+                StationID,
+                Role,
+                Status
+            FROM NotificationManagement
+            WHERE RaiseBy = @UserID
+              AND LineID = @LineID
+              AND StationID = @StationID
+              AND NotificationDesc = @ReasonName
+            ORDER BY NotificationID DESC;
+
+
+            /* =====================================================
+               9. Return Additional Information
+               ===================================================== */
+
+            SELECT
+                @TicketID AS TicketID,
+                @DepartmentID AS DepartmentID,
+                @DepartmentName AS RaiseBy,
+                @ReasonID AS ReasonID,
+                @ReasonName AS ReasonName;
+
+
+            COMMIT TRANSACTION;
+
+        END TRY
+
+        BEGIN CATCH
+
+            IF @@TRANCOUNT > 0
+                ROLLBACK TRANSACTION;
+
+            THROW;
+
+        END CATCH;
+    `);
+
+    return {
+        ticket: result.recordsets[0][0],
+        notification: result.recordsets[1][0],
+        details: result.recordsets[2][0]
+    };
 };
 
 const getOpenProductionTickets = async () => {
@@ -176,6 +428,926 @@ const getInspectionDefects = async (inspectionPointId) => {
     return result.recordset;
 };
 
+const confirmEngineInspection = async ({
+    ticketId,
+    auditGroup,
+    holdType,
+    partId,
+    planId,
+    forwardQty,
+    backwordQty,
+    inspectionDetails,
+    userId
+}) => {
+
+    const request = new sql.Request();
+
+
+    request.input(
+        "TicketID",
+        sql.Int,
+        ticketId
+    );
+
+    request.input(
+        "AuditGroup",
+        sql.Int,
+        auditGroup
+    );
+
+    request.input(
+        "HoldType",
+        sql.Int,
+        holdType
+    );
+
+    request.input(
+        "PartID",
+        sql.NVarChar(20),
+        partId
+    );
+
+    request.input(
+        "PlanID",
+        sql.Int,
+        planId
+    );
+
+    request.input(
+        "ForwardQty",
+        sql.Int,
+        forwardQty
+    );
+
+    request.input(
+        "BackwordQty",
+        sql.Int,
+        backwordQty
+    );
+
+    request.input(
+        "UserID",
+        sql.NVarChar(50),
+        userId
+    );
+
+
+    /*
+     * Convert inspectionDetails array
+     * into JSON for SQL Server.
+     */
+    request.input(
+        "InspectionDetails",
+        sql.NVarChar(sql.MAX),
+        JSON.stringify(inspectionDetails)
+    );
+
+
+    const result = await request.query(`
+
+        SET NOCOUNT ON;
+
+
+        BEGIN TRY
+
+            BEGIN TRANSACTION;
+
+
+            /* =========================================================
+               VARIABLES
+               ========================================================= */
+
+            DECLARE @EngineNo NVARCHAR(14);
+            DECLARE @SelectedPlanID INT;
+            DECLARE @SelectedLineID INT;
+            DECLARE @SelectedSKUID INT;
+            DECLARE @PartBatchID NVARCHAR(20);
+
+
+            /* =========================================================
+               1. GET ENGINE NO FROM TICKET
+               ========================================================= */
+
+            SELECT TOP 1
+                @EngineNo = EngineNo
+            FROM TicketManagement
+            WHERE TicketID = @TicketID
+              AND EngineNo IS NOT NULL
+            ORDER BY UID DESC;
+
+
+            IF @EngineNo IS NULL
+            BEGIN
+
+                THROW 50001,
+                    'Engine number not found against TicketID',
+                    1;
+
+            END;
+
+
+            /* =========================================================
+               2. GET SELECTED ENGINE INFORMATION
+               ========================================================= */
+
+            SELECT TOP 1
+                @SelectedPlanID = PlanID,
+                @SelectedLineID = LineID,
+                @SelectedSKUID = SKUID
+            FROM Prod_Engine_WIP
+            WHERE EngineNo = @EngineNo;
+
+
+            IF @SelectedPlanID IS NULL
+            BEGIN
+
+                SELECT TOP 1
+                    @SelectedPlanID = PlanID,
+                    @SelectedLineID = LineID,
+                    @SelectedSKUID = SKUID
+                FROM Prod_Engine_WIPHistory
+                WHERE EngineNo = @EngineNo;
+
+            END;
+
+
+            IF @SelectedPlanID IS NULL
+            BEGIN
+
+                THROW 50002,
+                    'Engine not found in Prod_Engine_WIP or Prod_Engine_WIPHistory',
+                    1;
+
+            END;
+
+
+            /* =========================================================
+               3. GET BATCH ID FOR BATCH HOLD
+               ========================================================= */
+
+            IF @HoldType = 2
+            BEGIN
+
+                SELECT TOP 1
+                    @PartBatchID = BatchID
+                FROM Prod_Engine_Part_Geneology
+                WHERE EngineNo = @EngineNo
+                  AND PartID = @PartID
+                ORDER BY UID DESC;
+
+
+                IF @PartBatchID IS NULL
+                BEGIN
+
+                    THROW 50003,
+                        'BatchID not found for selected EngineNo and PartID',
+                        1;
+
+                END;
+
+            END;
+
+
+            /* =========================================================
+               4. INSERT PROD_ENGINEHOLD
+               ========================================================= */
+
+            INSERT INTO Prod_EngineHold
+            (
+                TicketID,
+                AuditGroup,
+                HoldType,
+                PartID,
+                PartBatchID,
+                PlanID,
+                ForwardQty,
+                BackwordQty,
+                OkQty,
+                RejectedQty,
+                Status
+            )
+            VALUES
+            (
+                @TicketID,
+                @AuditGroup,
+                @HoldType,
+                @PartID,
+
+                CASE
+                    WHEN @HoldType = 2
+                        THEN @PartBatchID
+                    ELSE @PartID
+                END,
+
+                CASE
+                    WHEN @HoldType = 3
+                        THEN @PlanID
+                    ELSE @SelectedPlanID
+                END,
+
+                @ForwardQty,
+                @BackwordQty,
+                0,
+                0,
+                2
+            );
+
+
+            DECLARE @EngineHoldUID INT;
+
+            SET @EngineHoldUID = SCOPE_IDENTITY();
+
+
+            /* =========================================================
+               5. CREATE INSPECTION DETAILS TABLE
+               ========================================================= */
+
+            DECLARE @InspectionDetailsTable TABLE
+            (
+                InspectionPointID INT,
+                InspectionDefectID INT,
+                Remarks NVARCHAR(MAX)
+            );
+
+
+            INSERT INTO @InspectionDetailsTable
+            (
+                InspectionPointID,
+                InspectionDefectID,
+                Remarks
+            )
+            SELECT
+                InspectionPointID,
+                InspectionDefectID,
+                Remarks
+            FROM OPENJSON(@InspectionDetails)
+            WITH
+            (
+                InspectionPointID INT
+                    '$.inspectionPointId',
+
+                InspectionDefectID INT
+                    '$.inspectionDefectId',
+
+                Remarks NVARCHAR(MAX)
+                    '$.remarks'
+            );
+
+
+            /* =========================================================
+               6. VALIDATE INSPECTION DETAILS
+               ========================================================= */
+
+            IF NOT EXISTS
+            (
+                SELECT 1
+                FROM @InspectionDetailsTable
+            )
+            BEGIN
+
+                THROW 50004,
+                    'At least one inspection detail is required',
+                    1;
+
+            END;
+
+
+            /* =========================================================
+               7. TEMP TABLE FOR AFFECTED ENGINES
+               ========================================================= */
+
+            CREATE TABLE #AffectedEngines
+            (
+                EngineNo NVARCHAR(14) PRIMARY KEY,
+                TargetStatus INT
+            );
+
+
+            /* =========================================================
+               8. HOLD TYPE = 1
+            
+               ENGINE HOLD
+            
+               Selected engine = 14
+               Forward/Backward = 16
+            
+               VALIDATION:
+               If requested ForwardQty or BackwordQty is not
+               completely available, reject the complete request.
+               ========================================================= */
+            
+            IF @HoldType = 1
+            BEGIN
+            
+                DECLARE @AvailableForwardQty INT;
+                DECLARE @AvailableBackwordQty INT;
+            
+            
+                /* =====================================================
+                   8.1 CHECK AVAILABLE FORWARD ENGINES
+                   ===================================================== */
+            
+                SELECT
+                    @AvailableForwardQty = COUNT(*)
+                FROM
+                (
+                    SELECT
+                        EngineNo,
+                        StartTime
+                    FROM Prod_Engine_WIP
+                    WHERE PlanID = @SelectedPlanID
+                      AND LineID = @SelectedLineID
+                      AND EngineNo <> @EngineNo
+            
+                    UNION ALL
+            
+                    SELECT
+                        EngineNo,
+                        StartTime
+                    FROM Prod_Engine_WIPHistory
+                    WHERE PlanID = @SelectedPlanID
+                      AND LineID = @SelectedLineID
+                      AND EngineNo <> @EngineNo
+            
+                ) E
+                WHERE E.StartTime >
+                (
+                    SELECT TOP 1
+                        StartTime
+                    FROM
+                    (
+                        SELECT
+                            StartTime
+                        FROM Prod_Engine_WIP
+                        WHERE EngineNo = @EngineNo
+            
+                        UNION ALL
+            
+                        SELECT
+                            StartTime
+                        FROM Prod_Engine_WIPHistory
+                        WHERE EngineNo = @EngineNo
+                    ) S
+                    ORDER BY StartTime
+                );
+            
+            
+                /* =====================================================
+                   8.2 CHECK AVAILABLE BACKWARD ENGINES
+                   ===================================================== */
+            
+                SELECT
+                    @AvailableBackwordQty = COUNT(*)
+                FROM
+                (
+                    SELECT
+                        EngineNo,
+                        StartTime
+                    FROM Prod_Engine_WIP
+                    WHERE PlanID = @SelectedPlanID
+                      AND LineID = @SelectedLineID
+                      AND EngineNo <> @EngineNo
+            
+                    UNION ALL
+            
+                    SELECT
+                        EngineNo,
+                        StartTime
+                    FROM Prod_Engine_WIPHistory
+                    WHERE PlanID = @SelectedPlanID
+                      AND LineID = @SelectedLineID
+                      AND EngineNo <> @EngineNo
+            
+                ) E
+                WHERE E.StartTime <
+                (
+                    SELECT TOP 1
+                        StartTime
+                    FROM
+                    (
+                        SELECT
+                            StartTime
+                        FROM Prod_Engine_WIP
+                        WHERE EngineNo = @EngineNo
+            
+                        UNION ALL
+            
+                        SELECT
+                            StartTime
+                        FROM Prod_Engine_WIPHistory
+                        WHERE EngineNo = @EngineNo
+                    ) S
+                    ORDER BY StartTime DESC
+                );
+            
+            
+                /* =====================================================
+                   8.3 VALIDATE FORWARD QUANTITY
+                   ===================================================== */
+            
+                IF @AvailableForwardQty < @ForwardQty
+                BEGIN
+            
+                    THROW 50005,
+                        'Requested forward engine quantity is not available',
+                        1;
+            
+                END;
+            
+            
+                /* =====================================================
+                   8.4 VALIDATE BACKWARD QUANTITY
+                   ===================================================== */
+            
+                IF @AvailableBackwordQty < @BackwordQty
+                BEGIN
+            
+                    THROW 50006,
+                        'Requested backward engine quantity is not available',
+                        1;
+            
+                END;
+            
+            
+                /* =====================================================
+                   8.5 ADD SELECTED ENGINE
+                   ===================================================== */
+            
+                INSERT INTO #AffectedEngines
+                (
+                    EngineNo,
+                    TargetStatus
+                )
+                VALUES
+                (
+                    @EngineNo,
+                    14
+                );
+            
+            
+                /* =====================================================
+                   8.6 ADD FORWARD ENGINES
+                   ===================================================== */
+            
+                INSERT INTO #AffectedEngines
+                (
+                    EngineNo,
+                    TargetStatus
+                )
+                SELECT TOP (@ForwardQty)
+                    E.EngineNo,
+                    16
+                FROM
+                (
+                    SELECT
+                        EngineNo,
+                        StartTime
+                    FROM Prod_Engine_WIP
+                    WHERE PlanID = @SelectedPlanID
+                      AND LineID = @SelectedLineID
+                      AND EngineNo <> @EngineNo
+            
+                    UNION ALL
+            
+                    SELECT
+                        EngineNo,
+                        StartTime
+                    FROM Prod_Engine_WIPHistory
+                    WHERE PlanID = @SelectedPlanID
+                      AND LineID = @SelectedLineID
+                      AND EngineNo <> @EngineNo
+            
+                ) E
+                WHERE E.StartTime >
+                (
+                    SELECT TOP 1
+                        StartTime
+                    FROM
+                    (
+                        SELECT
+                            StartTime
+                        FROM Prod_Engine_WIP
+                        WHERE EngineNo = @EngineNo
+            
+                        UNION ALL
+            
+                        SELECT
+                            StartTime
+                        FROM Prod_Engine_WIPHistory
+                        WHERE EngineNo = @EngineNo
+                    ) S
+                    ORDER BY StartTime
+                )
+                ORDER BY
+                    E.StartTime ASC;
+            
+            
+                /* =====================================================
+                   8.7 ADD BACKWARD ENGINES
+                   ===================================================== */
+            
+                INSERT INTO #AffectedEngines
+                (
+                    EngineNo,
+                    TargetStatus
+                )
+                SELECT TOP (@BackwordQty)
+                    E.EngineNo,
+                    16
+                FROM
+                (
+                    SELECT
+                        EngineNo,
+                        StartTime
+                    FROM Prod_Engine_WIP
+                    WHERE PlanID = @SelectedPlanID
+                      AND LineID = @SelectedLineID
+                      AND EngineNo <> @EngineNo
+            
+                    UNION ALL
+            
+                    SELECT
+                        EngineNo,
+                        StartTime
+                    FROM Prod_Engine_WIPHistory
+                    WHERE PlanID = @SelectedPlanID
+                      AND LineID = @SelectedLineID
+                      AND EngineNo <> @EngineNo
+            
+                ) E
+                WHERE E.StartTime <
+                (
+                    SELECT TOP 1
+                        StartTime
+                    FROM
+                    (
+                        SELECT
+                            StartTime
+                        FROM Prod_Engine_WIP
+                        WHERE EngineNo = @EngineNo
+            
+                        UNION ALL
+            
+                        SELECT
+                            StartTime
+                        FROM Prod_Engine_WIPHistory
+                        WHERE EngineNo = @EngineNo
+                    ) S
+                    ORDER BY StartTime DESC
+                )
+                AND NOT EXISTS
+                (
+                    SELECT 1
+                    FROM #AffectedEngines A
+                    WHERE A.EngineNo = E.EngineNo
+                )
+                ORDER BY
+                    E.StartTime DESC;
+            
+            END;
+
+
+            /* =========================================================
+               9. HOLD TYPE = 2
+               
+               BATCH HOLD
+               ========================================================= */
+
+            ELSE IF @HoldType = 2
+            BEGIN
+
+                INSERT INTO #AffectedEngines
+                (
+                    EngineNo,
+                    TargetStatus
+                )
+                SELECT DISTINCT
+                    G.EngineNo,
+
+                    CASE
+                        WHEN G.EngineNo = @EngineNo
+                            THEN 14
+                        ELSE 16
+                    END
+
+                FROM Prod_Engine_Part_Geneology G
+                WHERE G.PartID = @PartID
+                  AND G.BatchID = @PartBatchID
+                  AND G.EngineNo IS NOT NULL;
+
+
+            END;
+
+
+            /* =========================================================
+               10. HOLD TYPE = 3
+               
+               PLAN HOLD
+               ========================================================= */
+
+            ELSE IF @HoldType = 3
+            BEGIN
+
+                INSERT INTO #AffectedEngines
+                (
+                    EngineNo,
+                    TargetStatus
+                )
+                SELECT DISTINCT
+                    E.EngineNo,
+
+                    CASE
+                        WHEN E.EngineNo = @EngineNo
+                            THEN 14
+                        ELSE 16
+                    END
+
+                FROM
+                (
+                    SELECT EngineNo
+                    FROM Prod_Engine_WIP
+                    WHERE PlanID = @PlanID
+
+                    UNION ALL
+
+                    SELECT EngineNo
+                    FROM Prod_Engine_WIPHistory
+                    WHERE PlanID = @PlanID
+
+                ) E
+
+                WHERE E.EngineNo IS NOT NULL;
+
+            END;
+
+
+            /* =========================================================
+               11. ENSURE SELECTED ENGINE EXISTS
+               ========================================================= */
+
+            IF NOT EXISTS
+            (
+                SELECT 1
+                FROM #AffectedEngines
+                WHERE EngineNo = @EngineNo
+            )
+            BEGIN
+
+                INSERT INTO #AffectedEngines
+                (
+                    EngineNo,
+                    TargetStatus
+                )
+                VALUES
+                (
+                    @EngineNo,
+                    14
+                );
+
+            END;
+
+
+            /* =========================================================
+               12. MOVE HISTORY ENGINES INTO WIP
+               ========================================================= */
+
+            INSERT INTO Prod_Engine_WIP
+            (
+                VREngineNo,
+                EngineNo,
+                PlanID,
+                SKUID,
+                LineID,
+                KITID,
+                StartTime,
+                EndTime,
+                Status,
+                NotOkStation,
+                ReEntryStation,
+                SAMarrigeStatus
+            )
+            SELECT
+                H.VREngineNo,
+                H.EngineNo,
+                H.PlanID,
+                H.SKUID,
+                H.LineID,
+                H.KITID,
+                H.StartTime,
+                H.EndTime,
+                A.TargetStatus,
+                H.NotOkStation,
+                H.ReEntryStation,
+                H.SAMarrigeStatus
+
+            FROM Prod_Engine_WIPHistory H
+
+            INNER JOIN #AffectedEngines A
+                ON H.EngineNo = A.EngineNo
+
+            WHERE NOT EXISTS
+            (
+                SELECT 1
+                FROM Prod_Engine_WIP W
+                WHERE W.VREngineNo = H.VREngineNo
+            );
+
+
+            /* =========================================================
+               13. DELETE MOVED HISTORY RECORDS
+               ========================================================= */
+
+            DELETE H
+
+            FROM Prod_Engine_WIPHistory H
+
+            INNER JOIN #AffectedEngines A
+                ON H.EngineNo = A.EngineNo
+
+            INNER JOIN Prod_Engine_WIP W
+                ON W.VREngineNo = H.VREngineNo;
+
+
+            /* =========================================================
+               14. UPDATE WIP STATUS
+               ========================================================= */
+
+            UPDATE W
+
+            SET
+                W.Status = A.TargetStatus
+
+            FROM Prod_Engine_WIP W
+
+            INNER JOIN #AffectedEngines A
+                ON W.EngineNo = A.EngineNo;
+
+
+            /* =========================================================
+               15. INSERT DEFECT LOG
+               
+               CROSS JOIN:
+               
+               Affected Engines
+                       X
+               Inspection Details
+               
+               Example:
+               
+               4 Engines
+               3 Defects
+               
+               = 12 Defect Logs
+               ========================================================= */
+
+            INSERT INTO Prod_Defect_Log
+            (
+                TicketID,
+                TimeStamp,
+                InspectionRefID,
+                DefectRefID,
+                EngineNo,
+                Remark,
+                EngineStatus,
+                DefectStatus,
+                UpdatedBy,
+                LastUpdatedTime,
+                QAlert
+            )
+
+            SELECT
+                @TicketID,
+                GETDATE(),
+
+                I.InspectionPointID,
+                I.InspectionDefectID,
+
+                A.EngineNo,
+
+                I.Remarks,
+
+                A.TargetStatus,
+
+                2,
+
+                @UserID,
+
+                GETDATE(),
+
+                2
+
+            FROM #AffectedEngines A
+
+            CROSS JOIN @InspectionDetailsTable I;
+
+
+            /* =========================================================
+               16. RETURN HOLD DATA
+               ========================================================= */
+
+            SELECT
+                UID,
+                TicketID,
+                AuditGroup,
+                HoldType,
+                PartID,
+                PartBatchID,
+                PlanID,
+                ForwardQty,
+                BackwordQty,
+                OkQty,
+                RejectedQty,
+                Status
+
+            FROM Prod_EngineHold
+
+            WHERE UID = @EngineHoldUID;
+
+
+            /* =========================================================
+               17. RETURN AFFECTED ENGINES
+               ========================================================= */
+
+            SELECT
+                A.EngineNo,
+                A.TargetStatus AS EngineStatus,
+                W.VREngineNo,
+                W.PlanID,
+                W.SKUID,
+                W.LineID
+
+            FROM #AffectedEngines A
+
+            INNER JOIN Prod_Engine_WIP W
+                ON W.EngineNo = A.EngineNo
+
+            ORDER BY
+                CASE
+                    WHEN A.EngineNo = @EngineNo
+                        THEN 0
+                    ELSE 1
+                END,
+                W.StartTime;
+
+
+            /* =========================================================
+               18. RETURN DEFECT LOGS CREATED
+               ========================================================= */
+
+            SELECT
+                DefectLogID,
+                TicketID,
+                InspectionRefID,
+                DefectRefID,
+                EngineNo,
+                Remark,
+                EngineStatus,
+                DefectStatus,
+                UpdatedBy,
+                LastUpdatedTime,
+                QAlert
+
+            FROM Prod_Defect_Log
+
+            WHERE TicketID = @TicketID
+
+              AND LastUpdatedTime >=
+                    DATEADD(SECOND, -5, GETDATE())
+
+            ORDER BY
+                DefectLogID;
+
+
+            COMMIT TRANSACTION;
+
+
+        END TRY
+
+
+        BEGIN CATCH
+
+            IF @@TRANCOUNT > 0
+                ROLLBACK TRANSACTION;
+
+            THROW;
+
+        END CATCH;
+
+    `);
+
+
+    return {
+
+        hold: result.recordsets[0],
+
+        engines: result.recordsets[1],
+
+        defectLogs: result.recordsets[2]
+
+    };
+
+};
+
 const getReworkTakeInEngines = async () => {
 
     const request = new sql.Request();
@@ -217,24 +1389,42 @@ const getEngineTakeInDetails = async (engineNo, vrEngineNo) => {
     );
 
     const result = await request.query(`
-        SELECT
-            VREngineNo,
-            EngineNo,
-            LineID,
-            ReEntryStation,
-            Status,
-            StartTime,
-            EndTime,
-            PlanID,
-            SKUID,
-            KITID,
-            NotOkStation,
-            SAMarrigeStatus
-        FROM Prod_Engine_WIP
-        WHERE
-            (@EngineNo IS NOT NULL AND EngineNo = @EngineNo)
-            OR
-            (@VREngineNo IS NOT NULL AND VREngineNo = @VREngineNo)
+    SELECT
+        PEW.VREngineNo,
+        PEW.EngineNo,
+    
+        PEW.LineID,
+        CL.LineName,
+    
+        PEW.ReEntryStation,
+        RS.StationName AS ReEntryStationName,
+    
+        PEW.NotOkStation,
+        NS.StationName AS NotOkStationName,
+    
+        PEW.Status,
+        PEW.StartTime,
+        PEW.EndTime,
+        PEW.PlanID,
+        PEW.SKUID,
+        PEW.KITID,
+        PEW.SAMarrigeStatus
+    
+    FROM Prod_Engine_WIP PEW
+    
+    LEFT JOIN Config_Station RS
+        ON RS.StationID = PEW.ReEntryStation
+    
+    LEFT JOIN Config_Station NS
+        ON NS.StationID = PEW.NotOkStation
+    
+    INNER JOIN Config_Line CL
+        ON CL.LineID = PEW.LineID
+    
+    WHERE
+        (@EngineNo IS NOT NULL AND PEW.EngineNo = @EngineNo)
+        OR
+        (@VREngineNo IS NOT NULL AND PEW.VREngineNo = @VREngineNo);
     `);
 
     return result.recordset;
@@ -591,10 +1781,12 @@ module.exports = {
     getTicketReasons,
     getTicketReasonRequiredFields,
     getDepartments,
+    notifySubmit,
     getOpenProductionTickets,
     getTicketDetails,
     getInspectionPoint,
     getInspectionDefects,
+    confirmEngineInspection,
     getReworkTakeInEngines,
     getEngineTakeInDetails,
     engineTakeIn,

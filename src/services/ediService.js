@@ -316,7 +316,6 @@ const confirmAuditList = async (data) => {
         NokSample
     } = data;
 
-
     if (!auditListID) {
         throw new Error("AuditListID is required");
     }
@@ -358,8 +357,7 @@ const confirmAuditList = async (data) => {
         throw new Error("Nok Sample is required");
     }
 
-
-    return await ediRepository.confirmIQC(
+    return await ediRepository.confirmAuditList(
         auditListID,
         auditInstanceID,
         batchId,
