@@ -31,4 +31,28 @@ router.post(
     ticketController.createTicket
 );
 
+// Get Open Material Tickets
+router.get(
+    "/open-material-tickets",
+    ticketController.getOpenMaterialTickets
+);
+
+
+// Get Open Quality Tickets
+router.get(
+    "/open-quality-tickets",
+    ticketController.getOpenQualityTickets
+);
+
+// Get Open Notifications
+router.get(
+    "/open-notifications",
+    ticketController.getOpenNotifications
+);
+
+router.post(
+    "/close-notifications",
+    ticketController.closeNotifications
+);
+
 module.exports = router;
