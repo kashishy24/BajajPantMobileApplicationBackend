@@ -4110,7 +4110,7 @@ const confirmHoldMaterial = async ({
         await genealogyRequest.query(`
             INSERT INTO Material_Receiving_Geneology
             (
-                UID,
+               
                 EDINumber,
                 PartID,
                 Status,
@@ -4123,7 +4123,7 @@ const confirmHoldMaterial = async ({
             )
             VALUES
             (
-                @UID,
+            
                 @EDINumber,
                 @PartID,
                 @Status,

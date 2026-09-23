@@ -143,28 +143,25 @@ const getWaitingForApprovalFQCAuditList = async (req, res) => {
 };
 
 //------- Waiting for Approval Checkpoint History Screen (Common)
+
 const getWaitingForApprovalFQCAuditPoints = async (req, res) => {
   try {
     const {
       DocumentID,
       AuditListID,
-      AuditInstanceID,
-      SampleLevel,
-      SampleNo
+      AuditInstanceID
     } = req.query;
 
     // Validation
     if (
       !DocumentID ||
       !AuditListID ||
-      !AuditInstanceID ||
-      !SampleLevel ||
-      !SampleNo
+      !AuditInstanceID
     ) {
       return res.status(400).json({
         success: false,
         message:
-          "DocumentID, AuditListID, AuditInstanceID, SampleLevel and SampleNo are required"
+          "DocumentID, AuditListID and AuditInstanceID are required"
       });
     }
 
@@ -186,18 +183,6 @@ const getWaitingForApprovalFQCAuditPoints = async (req, res) => {
       "AuditInstanceID",
       sql.BigInt,
       BigInt(AuditInstanceID)
-    );
-
-    request.input(
-      "SampleLevel",
-      sql.Int,
-      parseInt(SampleLevel)
-    );
-
-    request.input(
-      "SampleNo",
-      sql.Int,
-      parseInt(SampleNo)
     );
 
     const result = await request.execute(
@@ -223,6 +208,7 @@ const getWaitingForApprovalFQCAuditPoints = async (req, res) => {
     });
   }
 };
+
 
 //------------- Approved AuditList History Screen----------------
 const getApprovedFQCAuditList = async (req, res) => {
@@ -671,28 +657,28 @@ const updateFQCEngPerformanceCheckpointResult = async (req, res) => {
       SampleLevel,
       SampleNo,
 
+      // Power
       ObservationPowerValue,
       ObservationPowerValueResult,
-      ObservationPowerValueRemark,
-
       ObservationPowerRPMValue,
-      ObservationPowerRPMResult,
-      ObservationPowerRPMRemark,
 
+      // Torque
       ObservationTorqueValue,
       ObservationTorqueValueResult,
-      ObservationTorqueValueRemark,
-
       ObservationTorqueRPMValue,
-      ObservationTorqueRPMResult,
-      ObservationTorqueRPMRemark
+
+      // Common Remark
+      ObservationRemark
     } = req.body;
 
     // Required fields
     if (
       UID === undefined ||
+      UID === null ||
       SampleLevel === undefined ||
-      SampleNo === undefined
+      SampleLevel === null ||
+      SampleNo === undefined ||
+      SampleNo === null
     ) {
       return errorResponse(
         res,
@@ -704,14 +690,29 @@ const updateFQCEngPerformanceCheckpointResult = async (req, res) => {
     const request = new sql.Request();
 
     const result = await request
-      .input("UID", sql.Int, parseInt(UID))
-      .input("SampleLevel", sql.Int, parseInt(SampleLevel))
-      .input("SampleNo", sql.Int, parseInt(SampleNo))
+      .input(
+        "UID",
+        sql.Int,
+        parseInt(UID)
+      )
+      .input(
+        "SampleLevel",
+        sql.Int,
+        parseInt(SampleLevel)
+      )
+      .input(
+        "SampleNo",
+        sql.Int,
+        parseInt(SampleNo)
+      )
 
+      // -----------------------------------------
+      // Power
+      // -----------------------------------------
       .input(
         "ObservationPowerValue",
         sql.NVarChar(500),
-        ObservationPowerValue || null
+        ObservationPowerValue ?? null
       )
       .input(
         "ObservationPowerValueResult",
@@ -722,34 +723,18 @@ const updateFQCEngPerformanceCheckpointResult = async (req, res) => {
           : null
       )
       .input(
-        "ObservationPowerValueRemark",
-        sql.NVarChar(500),
-        ObservationPowerValueRemark || null
-      )
-
-      .input(
         "ObservationPowerRPMValue",
         sql.NVarChar(500),
-        ObservationPowerRPMValue || null
-      )
-      .input(
-        "ObservationPowerRPMResult",
-        sql.Int,
-        ObservationPowerRPMResult !== undefined &&
-        ObservationPowerRPMResult !== null
-          ? parseInt(ObservationPowerRPMResult)
-          : null
-      )
-      .input(
-        "ObservationPowerRPMRemark",
-        sql.NVarChar(500),
-        ObservationPowerRPMRemark || null
+        ObservationPowerRPMValue ?? null
       )
 
+      // -----------------------------------------
+      // Torque
+      // -----------------------------------------
       .input(
         "ObservationTorqueValue",
         sql.NVarChar(500),
-        ObservationTorqueValue || null
+        ObservationTorqueValue ?? null
       )
       .input(
         "ObservationTorqueValueResult",
@@ -760,31 +745,23 @@ const updateFQCEngPerformanceCheckpointResult = async (req, res) => {
           : null
       )
       .input(
-        "ObservationTorqueValueRemark",
-        sql.NVarChar(500),
-        ObservationTorqueValueRemark || null
-      )
-
-      .input(
         "ObservationTorqueRPMValue",
         sql.NVarChar(500),
-        ObservationTorqueRPMValue || null
-      )
-      .input(
-        "ObservationTorqueRPMResult",
-        sql.Int,
-        ObservationTorqueRPMResult !== undefined &&
-        ObservationTorqueRPMResult !== null
-          ? parseInt(ObservationTorqueRPMResult)
-          : null
-      )
-      .input(
-        "ObservationTorqueRPMRemark",
-        sql.NVarChar(500),
-        ObservationTorqueRPMRemark || null
+        ObservationTorqueRPMValue ?? null
       )
 
-      .execute("Tab_Q_FQC_UpdateEngPerformanceCheckpointResult");
+      // -----------------------------------------
+      // Common Remark
+      // -----------------------------------------
+      .input(
+        "ObservationRemark",
+        sql.NVarChar(500),
+        ObservationRemark ?? null
+      )
+
+      .execute(
+        "Tab_Q_FQC_UpdateEngPerformanceCheckpointResult"
+      );
 
     return successResponse(
       res,
@@ -1016,19 +993,17 @@ const getExecutedFQCEngInbuiltCheckpointDetails = async (req, res) => {
     const {
       AuditListID,
       AuditInstanceID,
-      SampleLevel,
-      SampleNo
+      SampleLevel
     } = req.query;
 
     if (
       AuditListID === undefined ||
       AuditInstanceID === undefined ||
-      SampleLevel === undefined ||
-      SampleNo === undefined
+      SampleLevel === undefined
     ) {
       return errorResponse(
         res,
-        "AuditListID, AuditInstanceID, SampleLevel and SampleNo are required",
+        "AuditListID, AuditInstanceID and SampleLevel are required",
         400
       );
     }
@@ -1050,11 +1025,6 @@ const getExecutedFQCEngInbuiltCheckpointDetails = async (req, res) => {
         "SampleLevel",
         sql.Int,
         parseInt(SampleLevel)
-      )
-      .input(
-        "SampleNo",
-        sql.Int,
-        parseInt(SampleNo)
       )
       .execute(
         "Tab_Q_FQC_GetExecuted_EngInbuilt_CheckpointDetails"
@@ -1080,26 +1050,23 @@ const getExecutedFQCEngInbuiltCheckpointDetails = async (req, res) => {
   }
 };
 
-
 //Performance
 const getExecutedFQCEngPerformanceCheckpointDetails = async (req, res) => {
   try {
     const {
       AuditListID,
       AuditInstanceID,
-      SampleLevel,
-      SampleNo
+      SampleLevel
     } = req.query;
 
     if (
       AuditListID === undefined ||
       AuditInstanceID === undefined ||
-      SampleLevel === undefined ||
-      SampleNo === undefined
+      SampleLevel === undefined
     ) {
       return errorResponse(
         res,
-        "AuditListID, AuditInstanceID, SampleLevel and SampleNo are required",
+        "AuditListID, AuditInstanceID and SampleLevel are required",
         400
       );
     }
@@ -1122,13 +1089,8 @@ const getExecutedFQCEngPerformanceCheckpointDetails = async (req, res) => {
         sql.Int,
         parseInt(SampleLevel)
       )
-      .input(
-        "SampleNo",
-        sql.Int,
-        parseInt(SampleNo)
-      )
       .execute(
-        "Tab_Q_FQC_GetExecutedEngPerformanceCheckpointDetails"
+        "Tab_Q_FQC_GetExecuted_EngPerformance_CheckpointDetails"
       );
 
     return successResponse(
@@ -1150,7 +1112,6 @@ const getExecutedFQCEngPerformanceCheckpointDetails = async (req, res) => {
     );
   }
 };
-
 
 //----------------Supervisor Login----
 
