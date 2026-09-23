@@ -246,6 +246,94 @@ const getTicketDetails = async (req, res) => {
     }
 };
 
+const submitUpdateTicket = async (req, res) => {
+    try {
+        const {
+            ticketId,
+            userId,
+            remark,
+            actionBy
+        } = req.body;
+
+        if (!ticketId) {
+            return errorResponse(res, "TicketID is required");
+        }
+
+        if (!userId) {
+            return errorResponse(res, "UserID is required");
+        }
+
+        if (!actionBy) {
+            return errorResponse(res, "ActionBy is required");
+        }
+
+        const result = await productionService.submitUpdateTicket({
+            ticketId,
+            userId,
+            remark,
+            actionBy
+        });
+
+        return successResponse(
+            res,
+            result,
+            "Ticket updated successfully"
+        );
+
+    } catch (error) {
+        console.error("Submit/Update Ticket Error:", error);
+
+        return errorResponse(
+            res,
+            error.message || "Failed to update ticket"
+        );
+    }
+};
+
+const closeTicket = async (req, res) => {
+    try {
+        const {
+            ticketId,
+            userId,
+            remark,
+            actionBy
+        } = req.body;
+
+        if (!ticketId) {
+            return errorResponse(res, "TicketID is required");
+        }
+
+        if (!userId) {
+            return errorResponse(res, "UserID is required");
+        }
+
+        if (!actionBy) {
+            return errorResponse(res, "ActionBy is required");
+        }
+
+        const result = await productionService.closeTicket({
+            ticketId,
+            userId,
+            remark,
+            actionBy
+        });
+
+        return successResponse(
+            res,
+            result,
+            "Ticket closed successfully"
+        );
+
+    } catch (error) {
+        console.error("Close Ticket Error:", error);
+
+        return errorResponse(
+            res,
+            error.message || "Failed to close ticket"
+        );
+    }
+};
+
 const getInspectionPoint = async (req, res) => {
 
     try {
@@ -801,6 +889,8 @@ module.exports = {
     notifySubmit,
     getOpenProductionTickets,
     getTicketDetails,
+    submitUpdateTicket,
+    closeTicket,
     getInspectionPoint,
     getInspectionDefects,
     confirmEngineInspection,

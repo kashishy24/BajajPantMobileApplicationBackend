@@ -75,6 +75,36 @@ const getTicketDetails = async (ticketId) => {
 
 };
 
+const submitUpdateTicket = async ({
+    ticketId,
+    userId,
+    remark,
+    actionBy
+}) => {
+
+    return await productionRepository.submitUpdateTicket({
+        ticketId,
+        userId,
+        remark,
+        actionBy
+    });
+};
+
+const closeTicket = async ({
+    ticketId,
+    userId,
+    remark,
+    actionBy
+}) => {
+
+    return await productionRepository.closeTicket({
+        ticketId,
+        userId,
+        remark,
+        actionBy
+    });
+};
+
 const getInspectionPoint = async () => {
 
     return await productionRepository.getInspectionPoint();
@@ -197,6 +227,8 @@ module.exports = {
     notifySubmit,
     getOpenProductionTickets,
     getTicketDetails,
+    submitUpdateTicket,
+    closeTicket,
     getInspectionPoint,
     getInspectionDefects,
     confirmEngineInspection,

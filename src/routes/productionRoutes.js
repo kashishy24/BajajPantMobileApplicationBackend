@@ -38,6 +38,16 @@ router.get(
     productionController.getTicketDetails
 );
 
+router.post(
+    "/submit-update",
+    productionController.submitUpdateTicket
+);
+
+router.post(
+    "/close",
+    productionController.closeTicket
+);
+
 router.get(
     "/inspection-points",
     productionController.getInspectionPoint

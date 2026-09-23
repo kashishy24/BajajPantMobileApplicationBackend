@@ -152,10 +152,158 @@ const createTicket = async (data) => {
 
 };
 
+const getOpenMaterialTickets = async () => {
+
+    const result = await new sql.Request().query(`
+        SELECT
+            TM.TicketID,
+            TM.TimeStamp,
+            TM.LineID,
+            L.LineName,
+            TM.StationID,
+            S.StationName,
+            TM.RaiseBy,
+            TM.Reason,
+            TM.Remark,
+            TM.ExpectedClosure,
+            TM.TicketStatus
+        FROM TicketManagement TM
+        INNER JOIN Config_Line L
+            ON TM.LineID = L.LineID
+        INNER JOIN Config_Station S
+            ON TM.StationID = S.StationID
+        WHERE TM.ActionBy = 'Material'
+          AND TM.TicketStatus = 1
+        ORDER BY
+            TM.TimeStamp DESC
+    `);
+
+    return result.recordset;
+};
+
+const getOpenQualityTickets = async () => {
+
+    const result = await new sql.Request().query(`
+        SELECT
+            TM.TicketID,
+            TM.TimeStamp,
+            TM.LineID,
+            L.LineName,
+            TM.StationID,
+            S.StationName,
+            TM.RaiseBy,
+            TM.Reason,
+            TM.Remark,
+            TM.ExpectedClosure,
+            TM.TicketStatus
+        FROM TicketManagement TM
+        INNER JOIN Config_Line L
+            ON TM.LineID = L.LineID
+        INNER JOIN Config_Station S
+            ON TM.StationID = S.StationID
+        WHERE TM.ActionBy = 'Quality'
+          AND TM.TicketStatus = 1
+        ORDER BY
+            TM.TimeStamp DESC
+    `);
+
+    return result.recordset;
+};
+
+const getOpenNotifications = async (userId) => {
+
+    const request = new sql.Request();
+
+    request.input(
+        "UserID",
+        sql.NVarChar(50),
+        userId
+    );
+
+    const result = await request.query(`
+        SELECT
+            NM.NotificationID,
+            NM.NotificationDesc,
+            NM.TimeStamp,
+            NM.RaiseBy,
+            RU.UserName AS RaiseByUserName,
+            RD.DepartmentName AS RaiseByDepartmentName,
+            NM.Category,
+            NM.LineID,
+            L.LineName,
+            NM.StationID,
+            S.StationName,
+            NM.Role,
+            NM.Status
+        FROM NotificationManagement NM
+        
+        -- Logged-in user
+        INNER JOIN Config_User U
+            ON U.UserID = @UserID
+        
+        -- Logged-in user's department
+        INNER JOIN Config_Department D
+            ON U.DepartmentID = D.DepartmentID
+        
+        -- Notification raised by user
+        LEFT JOIN Config_User RU
+            ON NM.RaiseBy = RU.UserID
+        
+        -- Department of notification raiser
+        LEFT JOIN Config_Department RD
+            ON RU.DepartmentID = RD.DepartmentID
+        
+        LEFT JOIN Config_Line L
+            ON NM.LineID = L.LineID
+        
+        LEFT JOIN Config_Station S
+            ON NM.StationID = S.StationID
+        
+        WHERE NM.Category = D.DepartmentName
+          AND NM.Status = 1
+        
+        ORDER BY
+            NM.TimeStamp DESC;
+    `);
+
+    return result.recordset;
+};
+
+const closeNotifications = async (notificationIds) => {
+
+    const request = new sql.Request();
+
+    const idList = notificationIds
+        .map((id, index) => {
+            request.input(`NotificationID${index}`, sql.Int, Number(id));
+            return `@NotificationID${index}`;
+        })
+        .join(",");
+
+    const result = await request.query(`
+        UPDATE NotificationManagement
+        SET Status = 2
+        WHERE NotificationID IN (${idList})
+          AND Status = 1;
+
+        SELECT
+            NotificationID,
+            Status
+        FROM NotificationManagement
+        WHERE NotificationID IN (${idList});
+    `);
+
+    return result.recordset;
+};
+
 module.exports = {
     getStations,
     getLines,
     getReasons,
     getRoles,
-    createTicket
+    createTicket,
+    getOpenMaterialTickets,
+    getOpenQualityTickets,
+    getOpenNotifications,
+    closeNotifications
 };

@@ -381,6 +381,394 @@ const getTicketDetails = async (ticketId) => {
     return result.recordset;
 };
 
+const submitUpdateTicket = async ({
+    ticketId,
+    userId,
+    remark,
+    actionBy
+}) => {
+
+    const request = new sql.Request();
+
+    request.input("TicketID", sql.Int, Number(ticketId));
+    request.input("UserID", sql.NVarChar(50), userId);
+    request.input("Remark", sql.NVarChar(sql.MAX), remark ?? null);
+    request.input("ActionBy", sql.NVarChar(50), actionBy);
+
+    const result = await request.query(`
+        SET NOCOUNT ON;
+
+        BEGIN TRY
+
+            BEGIN TRANSACTION;
+
+            DECLARE @DepartmentID INT;
+            DECLARE @DepartmentName NVARCHAR(100);
+            DECLARE @TrackingSeqNo INT;
+
+            /* =====================================================
+               1. Check Ticket Exists
+               ===================================================== */
+
+            IF NOT EXISTS
+            (
+                SELECT 1
+                FROM TicketManagement
+                WHERE TicketID = @TicketID
+            )
+            BEGIN
+                THROW 50001, 'TicketID not found', 1;
+            END;
+
+
+            /* =====================================================
+               2. Check Ticket is Open
+               ===================================================== */
+
+            IF NOT EXISTS
+            (
+                SELECT 1
+                FROM TicketManagement
+                WHERE TicketID = @TicketID
+                  AND TicketStatus = 1
+            )
+            BEGIN
+                THROW 50002, 'Ticket is already closed', 1;
+            END;
+
+
+            /* =====================================================
+               3. Get User Department
+               ===================================================== */
+
+            SELECT TOP 1
+                @DepartmentID = U.DepartmentID
+            FROM Config_User U
+            WHERE U.UserID = @UserID;
+
+            IF @DepartmentID IS NULL
+            BEGIN
+                THROW 50003, 'User not found or DepartmentID not configured', 1;
+            END;
+
+
+            /* =====================================================
+               4. Get Department Name
+               ===================================================== */
+
+            SELECT TOP 1
+                @DepartmentName = D.DepartmentName
+            FROM Config_Department D
+            WHERE D.DepartmentID = @DepartmentID;
+
+            IF @DepartmentName IS NULL
+            BEGIN
+                THROW 50004, 'Department not found for UserID', 1;
+            END;
+
+
+            /* =====================================================
+               5. Get Next Tracking Sequence
+               ===================================================== */
+
+            SELECT
+                @TrackingSeqNo = ISNULL(MAX(TrackingSeqNo), 0) + 1
+            FROM TicketManagement WITH (UPDLOCK, HOLDLOCK)
+            WHERE TicketID = @TicketID;
+
+
+            /* =====================================================
+               6. Insert New Ticket Tracking Entry
+               ===================================================== */
+
+            INSERT INTO TicketManagement
+            (
+                TicketID,
+                TimeStamp,
+                LineID,
+                StationID,
+                ActivityID,
+                PartID,
+                EquipmentID,
+                BreakdownID,
+                EngineNo,
+                RaiseBy,
+                Reason,
+                ActionBy,
+                Remark,
+                TrackingSeqNo,
+                ExpectedClosure,
+                TicketStatus
+            )
+            SELECT TOP 1
+                TicketID,
+                GETDATE(),
+                LineID,
+                StationID,
+                ActivityID,
+                PartID,
+                EquipmentID,
+                BreakdownID,
+                EngineNo,
+                @DepartmentName,
+                Reason,
+                @ActionBy,
+                @Remark,
+                @TrackingSeqNo,
+                ExpectedClosure,
+                1
+            FROM TicketManagement
+            WHERE TicketID = @TicketID
+            ORDER BY UID DESC;
+
+
+            /* =====================================================
+               7. Return Created Tracking Entry
+               ===================================================== */
+
+            SELECT TOP 1
+                UID,
+                TicketID,
+                TimeStamp,
+                LineID,
+                StationID,
+                ActivityID,
+                PartID,
+                EquipmentID,
+                BreakdownID,
+                EngineNo,
+                RaiseBy,
+                Reason,
+                ActionBy,
+                Remark,
+                TrackingSeqNo,
+                ExpectedClosure,
+                TicketStatus
+            FROM TicketManagement
+            WHERE TicketID = @TicketID
+              AND TrackingSeqNo = @TrackingSeqNo
+            ORDER BY UID DESC;
+
+
+            COMMIT TRANSACTION;
+
+        END TRY
+
+        BEGIN CATCH
+
+            IF @@TRANCOUNT > 0
+                ROLLBACK TRANSACTION;
+
+            THROW;
+
+        END CATCH;
+    `);
+
+    return {
+        ticket: result.recordset[0]
+    };
+};
+
+const closeTicket = async ({
+    ticketId,
+    userId,
+    remark,
+    actionBy
+}) => {
+
+    const request = new sql.Request();
+
+    request.input("TicketID", sql.Int, Number(ticketId));
+    request.input("UserID", sql.NVarChar(50), userId);
+    request.input("Remark", sql.NVarChar(sql.MAX), remark ?? null);
+    request.input("ActionBy", sql.NVarChar(50), actionBy);
+
+    const result = await request.query(`
+        SET NOCOUNT ON;
+
+        BEGIN TRY
+
+            BEGIN TRANSACTION;
+
+            DECLARE @DepartmentID INT;
+            DECLARE @DepartmentName NVARCHAR(100);
+            DECLARE @TrackingSeqNo INT;
+
+            /* =====================================================
+               1. Check Ticket Exists
+               ===================================================== */
+
+            IF NOT EXISTS
+            (
+                SELECT 1
+                FROM TicketManagement
+                WHERE TicketID = @TicketID
+            )
+            BEGIN
+                THROW 50001, 'TicketID not found', 1;
+            END;
+
+
+            /* =====================================================
+               2. Check Ticket is Open
+               ===================================================== */
+
+            IF NOT EXISTS
+            (
+                SELECT 1
+                FROM TicketManagement
+                WHERE TicketID = @TicketID
+                  AND TicketStatus = 1
+            )
+            BEGIN
+                THROW 50002, 'Ticket is already closed', 1;
+            END;
+
+
+            /* =====================================================
+               3. Get User Department
+               ===================================================== */
+
+            SELECT TOP 1
+                @DepartmentID = U.DepartmentID
+            FROM Config_User U
+            WHERE U.UserID = @UserID;
+
+
+            IF @DepartmentID IS NULL
+            BEGIN
+                THROW 50003, 'User not found or DepartmentID not configured', 1;
+            END;
+
+
+            /* =====================================================
+               4. Get Department Name
+               ===================================================== */
+
+            SELECT TOP 1
+                @DepartmentName = D.DepartmentName
+            FROM Config_Department D
+            WHERE D.DepartmentID = @DepartmentID;
+
+
+            IF @DepartmentName IS NULL
+            BEGIN
+                THROW 50004, 'Department not found for UserID', 1;
+            END;
+
+
+            /* =====================================================
+               5. Get Next Tracking Sequence
+               ===================================================== */
+
+            SELECT
+                @TrackingSeqNo = ISNULL(MAX(TrackingSeqNo), 0) + 1
+            FROM TicketManagement WITH (UPDLOCK, HOLDLOCK)
+            WHERE TicketID = @TicketID;
+
+
+            /* =====================================================
+               6. Insert New Closed Tracking Entry
+               ===================================================== */
+
+            INSERT INTO TicketManagement
+            (
+                TicketID,
+                TimeStamp,
+                LineID,
+                StationID,
+                ActivityID,
+                PartID,
+                EquipmentID,
+                BreakdownID,
+                EngineNo,
+                RaiseBy,
+                Reason,
+                ActionBy,
+                Remark,
+                TrackingSeqNo,
+                ExpectedClosure,
+                TicketStatus
+            )
+            SELECT TOP 1
+                TicketID,
+                GETDATE(),
+                LineID,
+                StationID,
+                ActivityID,
+                PartID,
+                EquipmentID,
+                BreakdownID,
+                EngineNo,
+                @DepartmentName,
+                Reason,
+                @ActionBy,
+                @Remark,
+                @TrackingSeqNo,
+                ExpectedClosure,
+                2
+            FROM TicketManagement
+            WHERE TicketID = @TicketID
+            ORDER BY UID DESC;
+
+
+            /* =====================================================
+               6.1. Close ALL Entries for TicketID
+               ===================================================== */
+
+            UPDATE TicketManagement
+            SET
+                TicketStatus = 2
+            WHERE TicketID = @TicketID;
+
+
+            /* =====================================================
+               7. Return Newly Created Closed Entry
+               ===================================================== */
+
+            SELECT TOP 1
+                UID,
+                TicketID,
+                TimeStamp,
+                LineID,
+                StationID,
+                ActivityID,
+                PartID,
+                EquipmentID,
+                BreakdownID,
+                EngineNo,
+                RaiseBy,
+                Reason,
+                ActionBy,
+                Remark,
+                TrackingSeqNo,
+                ExpectedClosure,
+                TicketStatus
+            FROM TicketManagement
+            WHERE TicketID = @TicketID
+              AND TrackingSeqNo = @TrackingSeqNo
+            ORDER BY UID DESC;
+
+
+            COMMIT TRANSACTION;
+
+        END TRY
+
+        BEGIN CATCH
+
+            IF @@TRANCOUNT > 0
+                ROLLBACK TRANSACTION;
+
+            THROW;
+
+        END CATCH;
+    `);
+
+    return {
+        ticket: result.recordset[0]
+    };
+};
+
 const getInspectionPoint = async () => {
 
     const request = new sql.Request();
@@ -1784,6 +2172,8 @@ module.exports = {
     notifySubmit,
     getOpenProductionTickets,
     getTicketDetails,
+    submitUpdateTicket,
+    closeTicket,
     getInspectionPoint,
     getInspectionDefects,
     confirmEngineInspection,

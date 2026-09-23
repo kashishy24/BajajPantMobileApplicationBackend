@@ -30,10 +30,38 @@ const createTicket = async (data) => {
 
 };
 
+const getOpenMaterialTickets = async () => {
+
+    return await ticketRepository.getOpenMaterialTickets();
+
+};
+
+const getOpenQualityTickets = async () => {
+
+    return await ticketRepository.getOpenQualityTickets();
+
+};
+
+const getOpenNotifications = async (userId) => {
+
+    return await ticketRepository.getOpenNotifications(userId);
+
+};
+
+const closeNotifications = async (notificationIds) => {
+
+    return await ticketRepository.closeNotifications(notificationIds);
+
+};
+
 module.exports = {
     getStations,
     getLines,
     getReasons,
     getRoles,
-    createTicket
+    createTicket,
+    getOpenMaterialTickets,
+    getOpenQualityTickets,
+    getOpenNotifications,
+    closeNotifications
 };
