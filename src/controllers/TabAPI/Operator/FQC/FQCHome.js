@@ -4,7 +4,6 @@ const {
   errorResponse,
 } = require("../../../../middlewares/responseHandler");
 
-
 //FQC Home Screen to get the Document List based on the Group
 const getAuditListByGroup = async (req, res) => {
   try {
@@ -1197,6 +1196,7 @@ const approveFQCAudit = async (req, res) => {
 };
 
 module.exports = {
+  
   getAuditListByGroup,
   getScheduleAuditList,
   executeFQCAudit,

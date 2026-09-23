@@ -6,6 +6,7 @@ const IQCHome = require("../controllers/TabAPI/Operator/IQC/IQCHome");
 
 
 //IQC Tab Screen
+router.get("/getProductionDateAndShift",IQCHome.getProductionDateAndShift);
 router.get("/getAuditListByGroup", IQCHome.getAuditListByGroup);
 router.get("/getPlannedIQCAuditList", IQCHome.getPlannedIQCAuditList);
 router.get("/getWaitingForApprovalIQCAuditHistory", IQCHome.getWaitingForApprovalIQCAuditHistory);

@@ -5,6 +5,47 @@ const {
 } = require("../../../../middlewares/responseHandler");
 
 
+
+const getProductionDateAndShift = async (req, res) => {
+  try {
+
+    const request = new sql.Request();
+
+    const result = await request.query(`
+      SELECT
+        MAX(CASE
+          WHEN ParameterName = 'ProdDate'
+          THEN ParameterValue
+        END) AS ProdDate,
+
+        MAX(CASE
+          WHEN ParameterName = 'ProdShift'
+          THEN ParameterValue
+        END) AS ProdShift
+
+      FROM ApplicationSetting
+      WHERE ParameterName IN ('ProdDate', 'ProdShift')
+    `);
+
+    return successResponse(
+      res,
+      result.recordset,
+      "Production date and shift fetched successfully"
+    );
+
+  } catch (error) {
+    console.error(
+      "Error fetching production date and shift:",
+      error
+    );
+
+    return errorResponse(
+      res,
+      error.message,
+      500
+    );
+  }
+};
 //IQC Home Screen to get the Document List based on the Group
 const getAuditListByGroup = async (req, res) => {
   try {
@@ -755,6 +796,7 @@ const approveIQCAudit = async (req, res) => {
 };
 
 module.exports = {
+  getProductionDateAndShift,
   getAuditListByGroup,
   getPlannedIQCAuditList,
   getWaitingForApprovalIQCAuditHistory,
