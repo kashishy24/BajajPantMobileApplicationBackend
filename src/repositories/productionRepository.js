@@ -69,7 +69,7 @@ const getDepartments = async () => {
     return result.recordset;
 };
 
-const notifySubmit = async ({
+const createTicketNotifySubmit = async ({
     lineId,
     stationId,
     activityId,
@@ -381,7 +381,7 @@ const getTicketDetails = async (ticketId) => {
     return result.recordset;
 };
 
-const submitUpdateTicket = async ({
+const openTicketNotify = async ({
     ticketId,
     userId,
     remark,
@@ -823,7 +823,7 @@ const confirmEngineInspection = async ({
     partId,
     planId,
     forwardQty,
-    backwordQty,
+    backwordQty, 
     inspectionDetails,
     userId
 }) => {
@@ -2169,10 +2169,10 @@ module.exports = {
     getTicketReasons,
     getTicketReasonRequiredFields,
     getDepartments,
-    notifySubmit,
+    createTicketNotifySubmit,
     getOpenProductionTickets,
     getTicketDetails,
-    submitUpdateTicket,
+    openTicketNotify,
     closeTicket,
     getInspectionPoint,
     getInspectionDefects,

@@ -44,6 +44,12 @@ router.get(
     ticketController.getOpenQualityTickets
 );
 
+// Get Open Maintenance Tickets
+router.get(
+    "/open-maintenance-tickets",
+    ticketController.getOpenMaintenanceTickets
+);
+
 // Get Open Notifications
 router.get(
     "/open-notifications",
@@ -54,5 +60,11 @@ router.post(
     "/close-notifications",
     ticketController.closeNotifications
 );
+
+router.post(
+    "/ipqc-hold",
+    ticketController.createIPQCHold
+);
+
 
 module.exports = router;
