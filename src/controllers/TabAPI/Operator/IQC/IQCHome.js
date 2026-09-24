@@ -166,45 +166,43 @@ const getExecutedIQCCheckpoint = async (req, res) => {
     const {
       documentId,
       auditListId,
-      auditInstanceId,
-      sampleLevel,
-      sampleNo
+      auditInstanceId
     } = req.query;
 
     // Validation
-    if (!documentId) {
-      return errorResponse(res, "DocumentID is required", 400);
+    if (documentId === undefined || documentId === null) {
+      return errorResponse(
+        res,
+        "DocumentID is required",
+        400
+      );
     }
 
-    if (!auditListId) {
-      return errorResponse(res, "AuditListID is required", 400);
+    if (auditListId === undefined || auditListId === null) {
+      return errorResponse(
+        res,
+        "AuditListID is required",
+        400
+      );
     }
 
-    if (!auditInstanceId) {
-      return errorResponse(res, "AuditInstanceID is required", 400);
-    }
-
-    if (!sampleLevel) {
-      return errorResponse(res, "SampleLevel is required", 400);
-    }
-
-    if (!sampleNo) {
-      return errorResponse(res, "SampleNo is required", 400);
+    if (auditInstanceId === undefined || auditInstanceId === null) {
+      return errorResponse(
+        res,
+        "AuditInstanceID is required",
+        400
+      );
     }
 
     const documentID = parseInt(documentId);
     const auditListID = parseInt(auditListId);
     const auditInstanceID = parseInt(auditInstanceId);
-    const sampleLevelValue = parseInt(sampleLevel);
-    const sampleNoValue = parseInt(sampleNo);
 
     // Validate numeric values
     if (
       isNaN(documentID) ||
       isNaN(auditListID) ||
-      isNaN(auditInstanceID) ||
-      isNaN(sampleLevelValue) ||
-      isNaN(sampleNoValue)
+      isNaN(auditInstanceID)
     ) {
       return errorResponse(
         res,
@@ -240,18 +238,6 @@ const getExecutedIQCCheckpoint = async (req, res) => {
       "AuditInstanceID",
       sql.BigInt,
       auditInstanceID
-    );
-
-    request.input(
-      "SampleLevel",
-      sql.Int,
-      sampleLevelValue
-    );
-
-    request.input(
-      "SampleNo",
-      sql.Int,
-      sampleNoValue
     );
 
     const result = await request.execute(
