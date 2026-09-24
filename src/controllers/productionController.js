@@ -113,7 +113,7 @@ const getDepartments = async (req, res) => {
     }
 };
 
-const notifySubmit = async (req, res) => {
+const createTicketNotifySubmit = async (req, res) => {
     try {
         const {
             lineId,
@@ -155,7 +155,7 @@ const notifySubmit = async (req, res) => {
             return errorResponse(res, "Role is required");
         }
 
-        const result = await productionService.notifySubmit({
+        const result = await productionService.createTicketNotifySubmit({
             lineId,
             stationId,
             activityId,
@@ -246,7 +246,7 @@ const getTicketDetails = async (req, res) => {
     }
 };
 
-const submitUpdateTicket = async (req, res) => {
+const openTicketNotify = async (req, res) => {
     try {
         const {
             ticketId,
@@ -267,7 +267,7 @@ const submitUpdateTicket = async (req, res) => {
             return errorResponse(res, "ActionBy is required");
         }
 
-        const result = await productionService.submitUpdateTicket({
+        const result = await productionService.openTicketNotify({
             ticketId,
             userId,
             remark,
@@ -886,10 +886,10 @@ module.exports = {
     getTicketReasons,
     getTicketReasonRequiredFields,
     getDepartments,
-    notifySubmit,
+    createTicketNotifySubmit,
     getOpenProductionTickets,
     getTicketDetails,
-    submitUpdateTicket,
+    openTicketNotify,
     closeTicket,
     getInspectionPoint,
     getInspectionDefects,

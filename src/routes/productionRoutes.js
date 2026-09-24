@@ -25,7 +25,7 @@ router.get(
 
 router.post(
     "/notify-submit",
-    productionController.notifySubmit
+    productionController.createTicketNotifySubmit
 );
 
 router.get(
@@ -40,7 +40,7 @@ router.get(
 
 router.post(
     "/submit-update",
-    productionController.submitUpdateTicket
+    productionController.openTicketNotify
 );
 
 router.post(

@@ -42,6 +42,12 @@ const getOpenQualityTickets = async () => {
 
 };
 
+const getOpenMaintenanceTickets = async () => {
+
+    return await ticketRepository.getOpenMaintenanceTickets();
+
+};
+
 const getOpenNotifications = async (userId) => {
 
     return await ticketRepository.getOpenNotifications(userId);
@@ -54,6 +60,12 @@ const closeNotifications = async (notificationIds) => {
 
 };
 
+const createIPQCHold = async (data) => {
+
+    return await ticketRepository.createIPQCHold(data);
+
+};
+
 module.exports = {
     getStations,
     getLines,
@@ -62,6 +74,8 @@ module.exports = {
     createTicket,
     getOpenMaterialTickets,
     getOpenQualityTickets,
+    getOpenMaintenanceTickets,
     getOpenNotifications,
-    closeNotifications
+    closeNotifications,
+    createIPQCHold
 };

@@ -30,7 +30,7 @@ const getDepartments = async () => {
 
 };
 
-const notifySubmit = async ({
+const createTicketNotifySubmit = async ({
     lineId,
     stationId,
     activityId,
@@ -46,7 +46,7 @@ const notifySubmit = async ({
     role
 }) => {
 
-    return await productionRepository.notifySubmit({
+    return await productionRepository.createTicketNotifySubmit({
         lineId,
         stationId,
         activityId,
@@ -75,14 +75,14 @@ const getTicketDetails = async (ticketId) => {
 
 };
 
-const submitUpdateTicket = async ({
+const openTicketNotify = async ({
     ticketId,
     userId,
     remark,
     actionBy
 }) => {
 
-    return await productionRepository.submitUpdateTicket({
+    return await productionRepository.openTicketNotify({
         ticketId,
         userId,
         remark,
@@ -224,10 +224,10 @@ module.exports = {
     getTicketReasons,
     getTicketReasonRequiredFields,
     getDepartments,
-    notifySubmit,
+    createTicketNotifySubmit,
     getOpenProductionTickets,
     getTicketDetails,
-    submitUpdateTicket,
+    openTicketNotify,
     closeTicket,
     getInspectionPoint,
     getInspectionDefects,
