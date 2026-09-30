@@ -263,7 +263,6 @@ const getExecutedIQCCheckpoint = async (req, res) => {
     );
   }
 };
-
 // Get Approved IQC Audit History acc to AuditListID, AuditInstanceID, PartID
 // Get Approved IQC Audit History according to DocumentID
 const getApprovedIQCAuditHistory = async (req, res) => {
