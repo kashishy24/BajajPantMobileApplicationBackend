@@ -1260,6 +1260,277 @@ const createIPQCHold = async ({
     };
 };
 
+const confirmIPQCHold = async ({ ticketId }) => {
+
+    const request = new sql.Request();
+
+    request.input("TicketID", sql.Int, ticketId);
+
+    const result = await request.query(`
+
+        SET NOCOUNT ON;
+
+        BEGIN TRY
+
+            BEGIN TRANSACTION;
+
+            /* =====================================================
+               VARIABLES
+            ===================================================== */
+
+            DECLARE @EngineNo NVARCHAR(14);
+            DECLARE @EngineHoldUID INT;
+
+
+            /* =====================================================
+               1. VALIDATION
+            ===================================================== */
+
+            IF @TicketID IS NULL
+            BEGIN
+                THROW 51001, 'TicketID is required', 1;
+            END;
+
+
+            /* =====================================================
+               2. GET TICKET ENGINE
+            ===================================================== */
+
+            SELECT TOP 1
+                @EngineNo = EngineNo
+            FROM TicketManagement
+            WHERE TicketID = @TicketID;
+
+
+            IF @EngineNo IS NULL
+            BEGIN
+                THROW 51002,
+                    'Ticket not found or EngineNo is not configured for TicketID',
+                    1;
+            END;
+
+
+            /* =====================================================
+               3. GET ENGINE HOLD
+            ===================================================== */
+
+            SELECT TOP 1
+                @EngineHoldUID = UID
+            FROM Prod_EngineHold
+            WHERE TicketID = @TicketID
+              AND Status = 1
+            ORDER BY UID DESC;
+
+
+            IF @EngineHoldUID IS NULL
+            BEGIN
+                THROW 51003,
+                    'Active Engine Hold not found for TicketID',
+                    1;
+            END;
+
+
+            /* =====================================================
+               4. VALIDATE DEFECT LOGS
+            ===================================================== */
+
+            IF NOT EXISTS
+            (
+                SELECT 1
+                FROM Prod_Defect_Log
+                WHERE TicketID = @TicketID
+            )
+            BEGIN
+                THROW 51004,
+                    'No defect logs found for TicketID',
+                    1;
+            END;
+
+
+            /* =====================================================
+               5. UPDATE WIP STATUS
+               
+               Selected Engine       -> 19
+               Other affected Engine -> 21
+            ===================================================== */
+
+            UPDATE W
+            SET
+                W.Status =
+                    CASE
+                        WHEN W.EngineNo = @EngineNo
+                            THEN 19
+                        ELSE 21
+                    END
+            FROM Prod_Engine_WIP W
+            INNER JOIN
+            (
+                SELECT DISTINCT
+                    EngineNo
+                FROM Prod_Defect_Log
+                WHERE TicketID = @TicketID
+                  AND EngineNo IS NOT NULL
+            ) D
+                ON D.EngineNo = W.EngineNo;
+
+
+            /* =====================================================
+               6. UPDATE DEFECT LOG STATUS
+               
+               Selected Engine       -> 19
+               Other affected Engine -> 21
+            ===================================================== */
+
+            UPDATE D
+            SET
+                D.EngineStatus =
+                    CASE
+                        WHEN D.EngineNo = @EngineNo
+                            THEN 19
+                        ELSE 21
+                    END,
+                D.LastUpdatedTime = GETDATE()
+            FROM Prod_Defect_Log D
+            WHERE D.TicketID = @TicketID;
+
+
+            /* =====================================================
+               7. UPDATE ENGINE HOLD
+               
+               Active Hold:
+               1 -> 2
+            ===================================================== */
+
+            UPDATE Prod_EngineHold
+            SET
+                Status = 2
+            WHERE UID = @EngineHoldUID
+              AND Status = 1;
+
+
+            /* =====================================================
+               8. RETURN TICKET
+            ===================================================== */
+
+            SELECT
+                UID,
+                TicketID,
+                TimeStamp,
+                LineID,
+                StationID,
+                ActivityID,
+                PartID,
+                EquipmentID,
+                BreakdownID,
+                EngineNo,
+                RaiseBy,
+                Reason,
+                ActionBy,
+                Remark,
+                TrackingSeqNo,
+                ExpectedClosure,
+                TicketStatus
+            FROM TicketManagement
+            WHERE TicketID = @TicketID;
+
+
+            /* =====================================================
+               9. RETURN ENGINE HOLD
+            ===================================================== */
+
+            SELECT
+                UID,
+                TicketID,
+                AuditGroup,
+                HoldType,
+                PartID,
+                PartBatchID,
+                PlanID,
+                ForwardQty,
+                BackwordQty,
+                OkQty,
+                RejectedQty,
+                Status
+            FROM Prod_EngineHold
+            WHERE UID = @EngineHoldUID;
+
+
+            /* =====================================================
+               10. RETURN WIP
+            ===================================================== */
+
+            SELECT
+                W.VREngineNo,
+                W.EngineNo,
+                W.PlanID,
+                W.SKUID,
+                W.LineID,
+                W.KITID,
+                W.StartTime,
+                W.EndTime,
+                W.Status,
+                W.NotOkStation,
+                W.ReEntryStation,
+                W.SAMarrigeStatus
+            FROM Prod_Engine_WIP W
+            INNER JOIN
+            (
+                SELECT DISTINCT
+                    EngineNo
+                FROM Prod_Defect_Log
+                WHERE TicketID = @TicketID
+                  AND EngineNo IS NOT NULL
+            ) D
+                ON D.EngineNo = W.EngineNo
+            ORDER BY W.StartTime;
+
+
+            /* =====================================================
+               11. RETURN DEFECT LOGS
+            ===================================================== */
+
+            SELECT
+                DefectLogID,
+                TicketID,
+                TimeStamp,
+                InspectionRefID,
+                DefectRefID,
+                EngineNo,
+                Remark,
+                EngineStatus,
+                DefectStatus,
+                UpdatedBy,
+                LastUpdatedTime,
+                QAlert
+            FROM Prod_Defect_Log
+            WHERE TicketID = @TicketID
+            ORDER BY DefectLogID;
+
+
+            COMMIT TRANSACTION;
+
+        END TRY
+
+        BEGIN CATCH
+
+            IF @@TRANCOUNT > 0
+                ROLLBACK TRANSACTION;
+
+            THROW;
+
+        END CATCH;
+
+    `);
+
+    return {
+        ticket: result.recordsets[0][0],
+        engineHold: result.recordsets[1][0],
+        wip: result.recordsets[2],
+        defectLogs: result.recordsets[3]
+    };
+};
+
+
 module.exports = {
     getStations,
     getLines,
@@ -1271,5 +1542,6 @@ module.exports = {
     getOpenMaintenanceTickets,
     getOpenNotifications,
     closeNotifications,
-    createIPQCHold
+    createIPQCHold,
+    confirmIPQCHold
 };

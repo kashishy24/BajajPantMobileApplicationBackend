@@ -66,5 +66,9 @@ router.post(
     ticketController.createIPQCHold
 );
 
+router.post(
+    "/ipqc-hold/confirm",
+    ticketController.confirmIPQCHold
+);
 
 module.exports = router;

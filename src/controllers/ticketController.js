@@ -450,6 +450,38 @@ const createIPQCHold = async (req, res) => {
     }
 };
 
+const confirmIPQCHold = async (req, res) => {
+
+    try {
+
+        const {
+            ticketId
+        } = req.body;
+
+        const result = await ticketService.confirmIPQCHoldService({
+            ticketId
+        });
+
+        return successResponse(
+            res,
+            "IPQC hold ticket confirmed successfully",
+            result
+        );
+
+    } catch (error) {
+
+        console.error(
+            "confirmIPQCHold error:",
+            error.message
+        );
+
+        return errorResponse(
+            res,
+            error.message
+        );
+    }
+};
+
 module.exports = {
     getStations,
     getLines,
@@ -461,5 +493,6 @@ module.exports = {
     getOpenMaintenanceTickets,
     getOpenNotifications,
     closeNotifications,
-    createIPQCHold
+    createIPQCHold,
+    confirmIPQCHold
 };

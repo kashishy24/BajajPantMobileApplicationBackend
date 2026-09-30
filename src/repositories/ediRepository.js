@@ -2525,29 +2525,36 @@ const bypassMaterial = async (
     
     // Completed
     insertBatchRequest.input("Status", sql.Int, 0);
+
+    insertBatchRequest.input("RunningBatch", sql.Int, 2);
+    insertBatchRequest.input("EnginePartID", sql.Int, 1)
     
     await insertBatchRequest.query(`
         INSERT INTO Material_BatchWiseQty
         (
             PartID,
+            EnginePartID,
             VendorID,
             AreaID,
             BatchID,
             Priority,
-            Quantity,
-            Consumed,
-            Status
+            OpenQty,
+            Used,
+            Status,
+            RunningBatch
         )
         VALUES
         (
             @PartID,
+            @EnginePartID,
             @VendorID,
             @AreaID,
             @BatchID,
             @Priority,
             @Quantity,
             @Consumed,
-            @Status
+            @Status,
+            @RunningBatch
         )
     `);
 
@@ -4300,6 +4307,14 @@ const confirmAuditList = async (
             materialStatus = 11;
 
         }
+         else if (
+            holdQty > 0 &&
+            okQty > 0
+        ) {
+
+            materialStatus = 7;
+
+        }
         else {
 
             throw new Error(
@@ -4923,6 +4938,8 @@ const confirmAuditList = async (
             sql.NVarChar,
             partId
         );
+
+        console.log("Fetching EnginePartID for PartID:", partId);
         
         const variantResult =
             await variantRequest.query(`

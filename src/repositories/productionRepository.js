@@ -1841,7 +1841,7 @@ const engineTakeIn = async (
         UPDATE Prod_Engine_WIP
         SET
             ReEntryStation = @TakeINStation,
-            Status = 5
+            Status = 8
         WHERE EngineNo = @EngineNo
     `);
 

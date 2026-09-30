@@ -66,6 +66,20 @@ const createIPQCHold = async (data) => {
 
 };
 
+const confirmIPQCHoldService = async ({ ticketId }) => {
+
+    if (!ticketId) {
+        throw new Error("TicketID is required");
+    }
+
+    const result = await ticketRepository.confirmIPQCHold({
+        ticketId
+    });
+
+    return result;
+};
+
+
 module.exports = {
     getStations,
     getLines,
@@ -77,5 +91,6 @@ module.exports = {
     getOpenMaintenanceTickets,
     getOpenNotifications,
     closeNotifications,
-    createIPQCHold
+    createIPQCHold, 
+    confirmIPQCHoldService
 };
