@@ -41,7 +41,6 @@ const getAssignedBreakdowns = async (userId) => {
     return result.recordset;
 };
 
-
 const assignBreakdown = async ({
     breakdownId,
     lossCode,
@@ -105,108 +104,41 @@ const assignBreakdown = async ({
     }
 };
 
-
 const closeBreakdown = async (payload) => {
-
     const transaction = new sql.Transaction();
-
     await transaction.begin();
 
     try {
-
         const request = new sql.Request(transaction);
 
-        request.input(
-            "BreakdownID",
-            sql.BigInt,
-            payload.breakdownId
-        );
-
-        request.input(
-            "ActionType",
-            sql.NVarChar(20),
-            payload.actionType
-        );
-
-        request.input(
-            "ActionTakenRemark",
-            sql.NVarChar(sql.MAX),
-            payload.actionTakenRemark ?? null
-        );
-
-        request.input(
-            "PermanentResolution",
-            sql.NVarChar(sql.MAX),
-            payload.permanentResolution ?? null
-        );
-
-        request.input(
-            "TargetDate",
-            sql.Date,
-            payload.targetDate ?? null
-        );
-
-        request.input(
-            "UserID",
-            sql.NVarChar(50),
-            payload.userId
-        );
-
-        request.input(
-            "LineID",
-            sql.Int,
-            payload.lineId
-        );
-
-        request.input(
-            "Role",
-            sql.NVarChar(50),
-            payload.role
-        );
-
+        request.input("BreakdownID", sql.BigInt, payload.breakdownId);
+        request.input("ResolutionType", sql.Int, payload.resolutionType);
+        request.input("CloseStatus", sql.Int, payload.resolutionType === 1 ? 5 : 6);
+        request.input("ActionTakenRemark", sql.NVarChar(sql.MAX), payload.actionTakenRemark ?? null);
+        request.input("PermanentResolution", sql.NVarChar(sql.MAX), payload.permanentResolution ?? null);
+        request.input("UserID", sql.NVarChar(50), payload.userId);
         request.input(
             "NotificationCategory",
             sql.NVarChar(50),
             payload.notificationCategory ?? "Maintenance"
         );
 
-        const resolutionType =
-            payload.actionType.toLowerCase() === "permanent"
-                ? 1
-                : 2;
-
-        const closeStatus =
-            resolutionType === 1
-                ? 5
-                : 6;
-
-        request.input(
-            "ResolutionType",
-            sql.Int,
-            resolutionType
-        );
-
-        request.input(
-            "CloseStatus",
-            sql.Int,
-            closeStatus
-        );
-
         const result = await request.query(`
             SET NOCOUNT ON;
+            SET XACT_ABORT ON;
 
-            DECLARE @StationID INT;
-            DECLARE @EquipmentID INT;
-            DECLARE @LossID INT;
-            DECLARE @SubLossID INT;
-            DECLARE @AlarmID INT;
-            DECLARE @BDTicketType INT;
-            DECLARE @ProdDate DATE;
-            DECLARE @ProdShift NVARCHAR(10);
-            DECLARE @BDRemark NVARCHAR(MAX);
-            DECLARE @AssignedUserID NVARCHAR(50);
-            DECLARE @OriginalStatus INT;
+            DECLARE @Now DATETIME = GETDATE();
+
+            -- breakdown data
+            DECLARE @StationID INT, @EquipmentID INT, @LossID INT, @SubLossID INT, @AlarmID INT;
+            DECLARE @AssignedUserID NVARCHAR(50), @OriginalStatus INT;
             DECLARE @NewBreakdownID BIGINT = NULL;
+
+            -- ticket data (temp store)
+            DECLARE @TicketID INT = NULL, @TLineID INT, @TStationID INT, @TActivityID INT;
+            DECLARE @TPartID NVARCHAR(20), @TEquipmentID INT, @TEngineNo NVARCHAR(14);
+            DECLARE @TRaiseBy NVARCHAR(50), @TExpectedClosure DATE;
+            DECLARE @NextSeqNo INT, @Department NVARCHAR(50);
 
             SELECT
                 @StationID = StationID,
@@ -214,154 +146,144 @@ const closeBreakdown = async (payload) => {
                 @LossID = LossID,
                 @SubLossID = SubLossID,
                 @AlarmID = AlarmID,
-                @BDTicketType = BDTicketType,
-                @ProdDate = ProdDate,
-                @ProdShift = ProdShift,
-                @BDRemark = BDRemark,
                 @AssignedUserID = AssignedUserID,
                 @OriginalStatus = BDStatus
             FROM dbo.Maint_BreakDown_Log WITH (UPDLOCK, HOLDLOCK)
             WHERE BreakdownID = @BreakdownID;
 
-            IF @StationID IS NULL
+            IF @@ROWCOUNT = 0
                 THROW 51001, 'Breakdown not found.', 1;
 
             IF @OriginalStatus <> 3
-                THROW 51002,
-                    'Breakdown must be assigned (status 3) before closure.',
-                    1;
+                THROW 51002, 'Breakdown must be assigned (status 3) before closure.', 1;
+
+            IF @AssignedUserID IS NULL OR @AssignedUserID <> @UserID
+                THROW 51005, 'Breakdown is assigned to a different user.', 1;
+
+            -- latest ticket row for this breakdown
+            SELECT TOP 1
+                @TicketID = TicketID,
+                @TLineID = LineID,
+                @TStationID = StationID,
+                @TActivityID = ActivityID,
+                @TPartID = PartID,
+                @TEquipmentID = EquipmentID,
+                @TEngineNo = EngineNo,
+                @TRaiseBy = RaiseBy,
+                @TExpectedClosure = ExpectedClosure
+            FROM dbo.TicketManagement WITH (UPDLOCK, HOLDLOCK)
+            WHERE BreakdownID = @BreakdownID
+            ORDER BY TrackingSeqNo DESC;
+
+            IF @TicketID IS NOT NULL
+            BEGIN
+                SELECT @NextSeqNo = ISNULL(MAX(TrackingSeqNo), 0) + 1
+                FROM dbo.TicketManagement
+                WHERE TicketID = @TicketID;
+
+                -- TODO: replace with your real user/department table
+                SELECT @Department = Config_Department.DepartmentName
+                FROM dbo.Config_User
+                inner join dbo.Config_Department on Config_User.DepartmentID = Config_Department.DepartmentID
+                WHERE UserID = @UserID;
+
+                IF @Department IS NULL
+                    THROW 51006, 'Department not found for this user.', 1;
+
+                INSERT INTO dbo.TicketManagement
+                (
+                    TicketID, TimeStamp, LineID, StationID, ActivityID, PartID,
+                    EquipmentID, BreakdownID, EngineNo, RaiseBy, ActionBy,
+                    Remark, TrackingSeqNo, ExpectedClosure, TicketStatus
+                )
+                VALUES
+                (
+                    @TicketID, @Now, @TLineID, @TStationID, @TActivityID, @TPartID,
+                    @TEquipmentID, @BreakdownID, @TEngineNo, @TRaiseBy, @Department,
+                    @ActionTakenRemark, @NextSeqNo, @TExpectedClosure, 2
+                );
+            END;
 
             UPDATE dbo.Maint_BreakDown_Log
             SET
-                BDEndTime = GETDATE(),
-                BDAssignCloseTime = GETDATE(),
-                BDTicketCloseTime = GETDATE(),
+                BDEndTime = @Now,
+                BDAssignCloseTime = @Now,
+                BDTicketCloseTime = CASE WHEN @TicketID IS NULL THEN NULL ELSE @Now END,
                 BDResolutionType = @ResolutionType,
                 BDActionTaken = @ActionTakenRemark,
                 BDPermanentActionPLan =
-                    CASE
-                        WHEN @ResolutionType = 1
-                        THEN @PermanentResolution
-                        ELSE BDPermanentActionPLan
-                    END,
+                    CASE WHEN @ResolutionType = 1
+                         THEN @PermanentResolution
+                         ELSE BDPermanentActionPLan END,
                 BDStatus = @CloseStatus,
-                TotalBDTime =
-                    ISNULL(TotalBDTime, 0) +
-                    DATEDIFF(SECOND, BDStartTime, GETDATE()),
-                TotalBDCount =
-                    ISNULL(TotalBDCount, 0) + 1
-            WHERE BreakdownID = @BreakdownID;
-
-            UPDATE dbo.TicketManagement
-            SET
-                TicketStatus = 3,
-                ActionBy = @UserID,
-                Remark = @ActionTakenRemark,
-                ExpectedClosure =
-                    COALESCE(@TargetDate, ExpectedClosure)
+                TotalBDTime = ISNULL(TotalBDTime, 0) + DATEDIFF(SECOND, BDStartTime, @Now),
+                TotalBDCount = ISNULL(TotalBDCount, 0) + 1
             WHERE BreakdownID = @BreakdownID;
 
             IF @ResolutionType = 2
             BEGIN
-
                 INSERT INTO dbo.Maint_BreakDown_Log
                 (
-                    BDTicketType,
-                    RefBreakdownID,
-                    StationID,
-                    EquipmentID,
-                    LossID,
-                    AlarmID,
-                    SubLossID,
-                    ProdDate,
-                    ProdShift,
-                    BDStartTime,
-                    BDMaintTicket,
-                    BDRemark,
-                    TotalBDTime,
-                    TotalBDCount,
-                    AssignedUserID,
-                    BDAssignOpenTime,
-                    BDStatus
+                    BDTicketType, RefBreakdownID, StationID, EquipmentID,
+                    LossID, AlarmID, SubLossID, ProdDate, ProdShift,
+                    BDStartTime, BDMaintTicket, BDRemark,
+                    TotalBDTime, TotalBDCount, AssignedUserID, BDAssignOpenTime, BDStatus
                 )
                 VALUES
                 (
-                    3,
-                    @BreakdownID,
-                    @StationID,
-                    @EquipmentID,
-                    @LossID,
-                    @AlarmID,
-                    @SubLossID,
-                    @ProdDate,
-                    @ProdShift,
-                    GETDATE(),
-                    1,
-                    @BDRemark,
-                    0,
-                    0,
-                    NULL,
-                    NULL,
-                    1
+                    4, @BreakdownID, @StationID, @EquipmentID,
+                    @LossID, @AlarmID, @SubLossID,
+                    CAST(@Now AS DATE),
+                    CASE
+                        WHEN CAST(@Now AS TIME) >= '07:00' AND CAST(@Now AS TIME) < '16:00' THEN 'A'
+                        WHEN CAST(@Now AS TIME) >= '16:00' OR CAST(@Now AS TIME) < '01:00' THEN 'B'
+                        ELSE 'C'
+                    END,
+                    @Now, NULL, NULL,
+                    0, 0, NULL, NULL, 1
                 );
 
                 SET @NewBreakdownID = SCOPE_IDENTITY();
-
             END;
 
-            INSERT INTO dbo.NotificationManagement
-            (
-                NotificationDesc,
-                TimeStamp,
-                RaiseBy,
-                LineID,
-                StationID,
-                Category,
-                Role,
-                Status
-            )
-            VALUES
-            (
-                CONCAT(
-                    'Breakdown ',
-                    @BreakdownID,
-                    CASE
-                        WHEN @ResolutionType = 1
-                        THEN ' permanently resolved.'
-                        ELSE CONCAT(
-                            ' temporarily resolved. Follow-up breakdown: ',
-                            @NewBreakdownID,
-                            '.'
-                        )
-                    END
-                ),
-                GETDATE(),
-                @UserID,
-                @LineID,
-                @StationID,
-                @NotificationCategory,
-                @Role,
-                1
-            );
+            IF @TicketID IS NOT NULL
+            BEGIN
+                INSERT INTO dbo.NotificationManagement
+                (NotificationDesc, TimeStamp, RaiseBy, LineID, StationID, Category, Role, Status)
+                VALUES
+                (
+                    CONCAT(
+                        'Breakdown ', @BreakdownID,
+                        CASE WHEN @ResolutionType = 1
+                             THEN ' permanently resolved.'
+                             ELSE CONCAT(' temporarily resolved. Follow-up breakdown: ', @NewBreakdownID, '.')
+                        END,
+                        ' Ticket: ', @TicketID
+                    ),
+                    @Now, @UserID, @TLineID, @TStationID,
+                    @NotificationCategory, @TRaiseBy, 1
+                );
+            END;
 
             SELECT
                 @BreakdownID AS BreakdownID,
                 @CloseStatus AS BDStatus,
+                @TicketID AS TicketID,
                 @NewBreakdownID AS NewBreakdownID;
         `);
 
         await transaction.commit();
-
         return result.recordset[0];
 
     } catch (error) {
-
-        await transaction.rollback();
-
+        try {
+            await transaction.rollback();
+        } catch (rollbackError) {
+            console.error("Rollback failed:", rollbackError.message);
+        }
         throw error;
     }
 };
-
 
 const createBreakdown = async (payload) => {
 

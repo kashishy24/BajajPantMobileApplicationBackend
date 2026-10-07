@@ -1,6 +1,4 @@
-const repository = require(
-  "../repositories/maintenanceBreakdownRepository"
-);
+const repository = require("../repositories/maintenanceBreakdownRepository");
 
 const getAssignedBreakdowns = async (userId) => {
   if (!userId) {
@@ -8,7 +6,7 @@ const getAssignedBreakdowns = async (userId) => {
   }
 
   const result = await repository.getAssignedBreakdowns(userId);
-  return result.recordset;
+  return result;
 };
 
 const assignBreakdown = async (payload) => {
@@ -31,31 +29,17 @@ const assignBreakdown = async (payload) => {
 };
 
 const closeBreakdown = async (payload) => {
-  const {
-    breakdownId,
-    actionType,
-    actionTakenRemark,
-    permanentResolution,
-    targetDate,
-    userId,
-    lineId,
-    role
-  } = payload;
+  const { breakdownId, resolutionType, actionTakenRemark, permanentResolution, userId } = payload;
 
-  if (!breakdownId || !actionType || !userId || lineId == null || !role) {
-    throw new Error(
-      "BreakdownID, ActionType, UserID, LineID and Role are required."
-    );
+  if (!breakdownId || !userId || !actionTakenRemark) {
+    throw new Error("BreakdownID, UserID and ActionTakenRemark are required.");
   }
 
-  if (!["permanent", "temp"].includes(actionType.toLowerCase())) {
-    throw new Error("ActionType must be Permanent or Temp.");
+  if (![1, 2].includes(resolutionType)) {
+    throw new Error("ResolutionType must be 1 (Permanent) or 2 (Temporary).");
   }
 
-  if (
-    actionType.toLowerCase() === "permanent" &&
-    !permanentResolution
-  ) {
+  if (resolutionType === 1 && !permanentResolution) {
     throw new Error("PermanentResolution is required for permanent closure.");
   }
 
