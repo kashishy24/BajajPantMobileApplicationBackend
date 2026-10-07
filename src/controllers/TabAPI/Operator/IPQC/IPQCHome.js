@@ -439,7 +439,7 @@ const approveIPQCAudit = async (req, res) => {
         ApprovedByRemark ?? null
       )
       .execute(
-        "Tab_IPQC_ApproveAudit"
+        "Tab_Q_ApproveIPQCAudit"
       );
 
     return successResponse(
@@ -461,6 +461,33 @@ const approveIPQCAudit = async (req, res) => {
     );
   }
 };
+
+
+//------------- Approved AuditList History Screen----------------
+const getApprovedIPQCAuditList = async (req, res) => {
+  try {
+    const request = new sql.Request();
+
+    const result = await request.execute(
+      "Tab_Q_IPQC_GetApprovedIPQCAuditList"
+    );
+
+    return successResponse(
+      res,
+      result.recordset,
+      "Approved FQC audit list fetched successfully"
+    );
+
+  } catch (error) {
+    console.error("Get Approved FQC Audit List Error:", error);
+
+    return errorResponse(
+      res,
+      error.message,
+      500
+    );
+  }
+}; 
 module.exports = {
   getScheduleAuditList,
   executeIPQCAudit,
@@ -469,5 +496,6 @@ module.exports = {
   submitIPQCAuditPoint,
   getWaitingForApprovalIPQCAuditList,
   getExecutedIPQCCheckpointDetails,
-  approveIPQCAudit
+  approveIPQCAudit,
+  getApprovedIPQCAuditList
 };    

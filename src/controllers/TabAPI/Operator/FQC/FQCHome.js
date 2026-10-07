@@ -233,7 +233,7 @@ const getApprovedFQCAuditList = async (req, res) => {
       500
     );
   }
-};
+}; 
 
 //---------Mark checkpoint screen-----------------------
 
