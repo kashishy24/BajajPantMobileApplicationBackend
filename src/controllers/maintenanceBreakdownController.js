@@ -2,7 +2,6 @@ const service = require(
   "../services/maintenanceBreakdownService"
 );
 
-// Replace these imports with the exact helper paths used in your project.
 const {
     successResponse,
     errorResponse
@@ -62,9 +61,49 @@ const createBreakdown = async (req, res) => {
   }
 };
 
+const getOpenBreakdowns = async (req, res) => {
+  try {
+    const data = await service.getOpenBreakdowns(req.query);
+    return successResponse(res, data, "Open breakdowns fetched successfully.");
+  } catch (error) {
+    return errorResponse(res, error.message);
+  }
+};
+
+const getBreakdownById = async (req, res) => {
+  try {
+    const data = await service.getBreakdownById(req.params.breakdownId);
+    return successResponse(res, data, "Breakdown details fetched successfully.");
+  } catch (error) {
+    return errorResponse(res, error.message);
+  }
+};
+
+const getLossCodes = async (req, res) => {
+  try {
+    const data = await service.getLossCodes();
+    return successResponse(res, data, "Loss codes fetched successfully.");
+  } catch (error) {
+    return errorResponse(res, error.message);
+  }
+};
+
+const getSubLossCodes = async (req, res) => {
+  try {
+    const data = await service.getSubLossCodes(req.params.lossId);
+    return successResponse(res, data, "Sub loss codes fetched successfully.");
+  } catch (error) {
+    return errorResponse(res, error.message);
+  }
+};
+
 module.exports = {
   getAssignedBreakdowns,
   assignBreakdown,
   closeBreakdown,
-  createBreakdown
+  createBreakdown,
+  getOpenBreakdowns,
+  getBreakdownById,
+  getLossCodes,
+  getSubLossCodes
 };

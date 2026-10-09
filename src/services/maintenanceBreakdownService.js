@@ -96,35 +96,56 @@ const createBreakdown = async (payload) => {
   });
 };
 
-// const createBreakdown = async (payload) => {
-//   const {
-//     bdType,
-//     lineId,
-//     stationId,
-//     equipmentId,
-//     userId,
-//     role
-//   } = payload;
+const getOpenBreakdowns = async (query) => {
+  const stationId =
+    query.stationId != null && query.stationId !== ""
+      ? Number(query.stationId)
+      : null;
 
-//   if (
-//     bdType == null ||
-//     lineId == null ||
-//     stationId == null ||
-//     equipmentId == null ||
-//     !userId ||
-//     !role
-//   ) {
-//     throw new Error(
-//       "BDType, LineID, StationID, EquipmentID, UserID and Role are required."
-//     );
-//   }
+  if (stationId !== null && !Number.isInteger(stationId)) {
+    throw new Error("StationID must be an integer.");
+  }
 
-//   return repository.createBreakdown(payload);
-// };
+  return repository.getOpenBreakdowns(stationId);
+};
+
+const getBreakdownById = async (breakdownId) => {
+  const id = Number(breakdownId);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error("A valid BreakdownID is required.");
+  }
+
+  const breakdown = await repository.getBreakdownById(id);
+
+  if (!breakdown) {
+    throw new Error("Breakdown not found.");
+  }
+
+  return breakdown;
+};
+
+const getLossCodes = async () => {
+  return repository.getLossCodes();
+};
+
+const getSubLossCodes = async (lossId) => {
+  const id = Number(lossId);
+
+  if (!Number.isInteger(id)) {
+    throw new Error("A valid LossID is required.");
+  }
+
+  return repository.getSubLossCodes(id);
+};
 
 module.exports = {
   getAssignedBreakdowns,
   assignBreakdown,
   closeBreakdown,
-  createBreakdown
+  createBreakdown,
+  getOpenBreakdowns,
+  getBreakdownById,
+  getLossCodes,
+  getSubLossCodes
 };
