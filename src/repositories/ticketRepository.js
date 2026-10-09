@@ -182,7 +182,7 @@ const getOpenMaterialTickets = async () => {
 };
 
 const getOpenQualityTickets = async () => {
-
+ 
     const result = await new sql.Request().query(`
         SELECT
             TM.TicketID,
@@ -192,6 +192,7 @@ const getOpenQualityTickets = async () => {
             TM.StationID,
             S.StationName,
             TM.RaiseBy,
+            TM.ActionBy,
             TM.Reason,
             TM.Remark,
             TM.ExpectedClosure,
@@ -206,7 +207,7 @@ const getOpenQualityTickets = async () => {
         ORDER BY
             TM.TimeStamp DESC
     `);
-
+ 
     return result.recordset;
 };
 

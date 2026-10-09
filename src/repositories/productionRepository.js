@@ -29,30 +29,57 @@ const getTicketReasons = async () => {
     return result.recordset;
 };
 
-const getTicketReasonRequiredFields = async (
-    departmentId,
-    reasonName
-) => {
-
+const getTicketReasonRequiredFields = async (reasonName) => {
+ 
     const request = new sql.Request();
-
-    request.input("DepartmentID", sql.Int, departmentId);
+ 
     request.input("ReasonName", sql.NVarChar(100), reasonName);
-
+ 
     const result = await request.query(`
-        SELECT
-            IsPokaYoka,
-            IsEngineNO,
-            IsStationID,
-            IsPartID,
-            IsEquipmentID,
-            IsBreakdownID
+        SELECT TOP (1) *
         FROM Config_TicketReason
-        WHERE DepartmentID = @DepartmentID
-          AND ReasonName = @ReasonName
+        WHERE ReasonName = @ReasonName
+        ORDER BY UID
     `);
-
-    return result.recordset;
+ 
+    const metadataColumns = new Set([
+        "UID",
+        "DepartmentID",
+        "ReasonName",
+        "Priority"
+    ]);
+    const builtInColumns = new Set([
+        "IsPokaYoka",
+        "IsEngineNO",
+        "IsStationID",
+        "IsPartID",
+        "IsEquipmentID",
+        "IsBreakdownID"
+    ]);
+ 
+    return result.recordset.map(row => ({
+        ...row,
+        additionalFields: Object.entries(row)
+            .filter(([columnName, value]) =>
+                !metadataColumns.has(columnName) &&
+                !builtInColumns.has(columnName) &&
+                Number(value) === 1
+            )
+            .map(([columnName]) => {
+                const fieldName = columnName.replace(/^Is/, "").replace(/ID$/, "");
+                const label = fieldName
+                    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+                    .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2")
+                    .replace(/^./, character => character.toUpperCase());
+                const payloadName = columnName.replace(/^Is/, "");
+ 
+                return {
+                    columnName,
+                    label,
+                    payloadKey: payloadName.charAt(0).toLowerCase() + payloadName.slice(1)
+                };
+            })
+    }));
 };
 
 const getDepartments = async () => {
@@ -321,7 +348,7 @@ const createTicketNotifySubmit = async ({
 };
 
 const getOpenProductionTickets = async () => {
-
+ 
     const result = await new sql.Request().query(`
         SELECT
             TM.TicketID,
@@ -331,6 +358,7 @@ const getOpenProductionTickets = async () => {
             TM.StationID,
             S.StationName,
             TM.RaiseBy,
+            TM.ActionBy,
             TM.Reason,
             TM.Remark,
             TM.ExpectedClosure,
@@ -345,7 +373,7 @@ const getOpenProductionTickets = async () => {
         ORDER BY
             TM.TimeStamp DESC
     `);
-
+ 
     return result.recordset;
 };
 

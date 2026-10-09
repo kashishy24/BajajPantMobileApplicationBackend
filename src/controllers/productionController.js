@@ -51,43 +51,36 @@ const getTicketReasons = async (req, res) => {
 };
 
 const getTicketReasonRequiredFields = async (req, res) => {
-
+ 
     try {
-
-        const {
-            departmentId,
-            reasonName
-        } = req.query;
-
-        if (
-            departmentId === undefined ||
-            !reasonName
-        ) {
+ 
+        const {reasonName} = req.query;
+ 
+        if (!reasonName) {
             return errorResponse(
                 res,
-                "DepartmentID and ReasonName are required"
+                "ReasonName is required"
             );
         }
-
+ 
         const data =
             await productionService.getTicketReasonRequiredFields(
-                departmentId,
                 reasonName
             );
-
+ 
         return successResponse(
             res,
             data,
             "Required Fields Fetched Successfully"
         );
-
+ 
     } catch (error) {
-
+ 
         return errorResponse(
             res,
             error.message
         );
-
+ 
     }
 };
 

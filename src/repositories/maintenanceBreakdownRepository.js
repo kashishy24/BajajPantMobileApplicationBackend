@@ -286,201 +286,125 @@ const closeBreakdown = async (payload) => {
 };
 
 const createBreakdown = async (payload) => {
-
     const transaction = new sql.Transaction();
-
     await transaction.begin();
 
     try {
-
         const request = new sql.Request(transaction);
 
-        request.input(
-            "BDType",
-            sql.Int,
-            payload.bdType
-        );
-
-        request.input(
-            "RefBreakdownID",
-            sql.BigInt,
-            payload.refBreakdownId ?? null
-        );
-
-        request.input(
-            "LineID",
-            sql.Int,
-            payload.lineId
-        );
-
-        request.input(
-            "StationID",
-            sql.Int,
-            payload.stationId
-        );
-
-        request.input(
-            "EquipmentID",
-            sql.Int,
-            payload.equipmentId
-        );
-
-        request.input(
-            "LossID",
-            sql.Int,
-            payload.lossCode ?? null
-        );
-
-        request.input(
-            "SubLossID",
-            sql.Int,
-            payload.subLossCode ?? null
-        );
-
-        request.input(
-            "Remark",
-            sql.NVarChar(sql.MAX),
-            payload.remark ?? null
-        );
-
-        request.input(
-            "AssignEngineer",
-            sql.NVarChar(50),
-            payload.assignEngineer ?? null
-        );
-
-        request.input(
-            "UserID",
-            sql.NVarChar(50),
-            payload.userId
-        );
-
-        request.input(
-            "Role",
-            sql.NVarChar(50),
-            payload.role
-        );
-
-        request.input(
-            "NotificationCategory",
-            sql.NVarChar(50),
-            payload.notificationCategory ?? "Maintenance"
-        );
+        request.input("BDType", sql.Int, payload.bdType);
+        request.input("RefBreakdownID", sql.BigInt, payload.refBreakdownId ?? null);
+        request.input("LineID", sql.Int, payload.lineId);
+        request.input("StationID", sql.Int, payload.stationId);
+        request.input("EquipmentID", sql.Int, payload.equipmentId);
+        request.input("LossID", sql.Int, payload.lossCode ?? null);
+        request.input("SubLossID", sql.Int, payload.subLossCode ?? null);
+        request.input("Remark", sql.NVarChar(sql.MAX), payload.remark ?? null);
+        request.input("AssignEngineer", sql.NVarChar(50), payload.assignEngineer || null);
+        request.input("UserID", sql.NVarChar(50), payload.userId);
+        request.input("RaiseToDepartment", sql.NVarChar(50), payload.raiseToDepartment);
+        request.input("RaiseToRole", sql.NVarChar(50), payload.raiseToRole);
 
         const result = await request.query(`
             SET NOCOUNT ON;
-
-            IF NOT EXISTS
-            (
-                SELECT 1
-                FROM dbo.Config_Station
-                WHERE StationID = @StationID
-            )
-                THROW 51003,
-                    'StationID does not exist.',
-                    1;
-
-            IF NOT EXISTS
-            (
-                SELECT 1
-                FROM dbo.Config_Equipment
-                WHERE EquipmentID = @EquipmentID
-                  AND StationID = @StationID
-            )
-                THROW 51004,
-                    'Equipment does not belong to the selected station.',
-                    1;
+            SET XACT_ABORT ON;
 
             DECLARE @Now DATETIME = GETDATE();
             DECLARE @NewBreakdownID BIGINT;
+            DECLARE @LossName NVARCHAR(200) = NULL;
+            DECLARE @SubLossName NVARCHAR(200) = NULL;
+            DECLARE @ProdShift NVARCHAR(10);
+
+            SELECT @ProdShift = ParameterValue
+            FROM dbo.ApplicationSetting
+            WHERE ParameterName = 'ProdShift'
+              AND LineID = @LineID;
+            
+            IF @ProdShift IS NULL
+                THROW 51010, 'ProdShift setting not found for this line.', 1;
+
+            DECLARE @NewTotalBDCount INT;
+
+            SELECT TOP 1 @NewTotalBDCount = ISNULL(TotalBDCount, 0) + 1
+            FROM dbo.Maint_BreakDown_Log WITH (UPDLOCK, HOLDLOCK)
+            ORDER BY BreakdownID DESC;
+            
+            SET @NewTotalBDCount = ISNULL(@NewTotalBDCount, 1);   
+
+            IF NOT EXISTS (SELECT 1 FROM dbo.Config_Station WHERE StationID = @StationID)
+                THROW 51003, 'StationID does not exist.', 1;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM dbo.Config_Equipment
+                WHERE EquipmentID = @EquipmentID AND StationID = @StationID
+            )
+                THROW 51004, 'Equipment does not belong to the selected station.', 1;
+
+            IF @RefBreakdownID IS NOT NULL
+               AND NOT EXISTS (
+                    SELECT 1 FROM dbo.Maint_BreakDown_Log
+                    WHERE BreakdownID = @RefBreakdownID
+               )
+                THROW 51008, 'RefBreakdownID does not exist.', 1;
+
+            IF @AssignEngineer IS NOT NULL
+               AND NOT EXISTS (
+                    SELECT 1 FROM dbo.Config_User WHERE UserID = @AssignEngineer
+               )
+                THROW 51009, 'Assigned engineer does not exist.', 1;
+
+            -- loss / sub loss names for the notification text
+            IF @LossID IS NOT NULL
+                SELECT @LossName = LossName
+                FROM dbo.Config_LossCategory
+                WHERE LossID = @LossID;
+
+            IF @SubLossID IS NOT NULL
+                SELECT @SubLossName = SubLossName
+                FROM dbo.Config_SubLossCategory
+                WHERE SubLossID = @SubLossID;
 
             DECLARE @InitialStatus INT =
-                CASE
-                    WHEN NULLIF(@AssignEngineer, '') IS NULL
-                    THEN 1
-                    ELSE 3
-                END;
+                CASE WHEN @AssignEngineer IS NULL THEN 1 ELSE 3 END;
 
             INSERT INTO dbo.Maint_BreakDown_Log
             (
-                BDTicketType,
-                RefBreakdownID,
-                StationID,
-                EquipmentID,
-                LossID,
-                SubLossID,
-                ProdDate,
-                ProdShift,
-                BDStartTime,
-                BDMaintTicket,
-                BDRemark,
-                TotalBDTime,
-                TotalBDCount,
-                AssignedUserID,
-                BDAssignOpenTime,
-                BDStatus
+                BDTicketType, RefBreakdownID, StationID, EquipmentID,
+                LossID, SubLossID, ProdDate, ProdShift,
+                BDStartTime, BDMaintTicket, BDRemark,
+                TotalBDTime, TotalBDCount,
+                AssignedUserID, BDAssignOpenTime, BDStatus
             )
             VALUES
             (
-                @BDType,
-                @RefBreakdownID,
-                @StationID,
-                @EquipmentID,
-                @LossID,
-                @SubLossID,
+                @BDType, @RefBreakdownID, @StationID, @EquipmentID,
+                @LossID, @SubLossID,
                 CAST(@Now AS DATE),
-
-                CASE
-                    WHEN CAST(@Now AS TIME) >= '07:00'
-                     AND CAST(@Now AS TIME) < '16:00'
-                    THEN 'A'
-
-                    WHEN CAST(@Now AS TIME) >= '16:00'
-                      OR CAST(@Now AS TIME) < '01:00'
-                    THEN 'B'
-
-                    ELSE 'C'
-                END,
-
-                @Now,
-                1,
-                @Remark,
-                0,
-                0,
-                NULLIF(@AssignEngineer, ''),
-                CASE
-                    WHEN NULLIF(@AssignEngineer, '') IS NULL
-                    THEN NULL
-                    ELSE @Now
-                END,
+                @ProdShift,                -- from ApplicationSetting
+                @Now, 1, @Remark,
+                0, @NewTotalBDCount,       -- TotalBDTime = 0, TotalBDCount = last + 1
+                @AssignEngineer,
+                CASE WHEN @AssignEngineer IS NULL THEN NULL ELSE @Now END,
                 @InitialStatus
             );
 
             SET @NewBreakdownID = SCOPE_IDENTITY();
 
             INSERT INTO dbo.NotificationManagement
-            (
-                NotificationDesc,
-                TimeStamp,
-                RaiseBy,
-                LineID,
-                StationID,
-                Category,
-                Role,
-                Status
-            )
+            (NotificationDesc, TimeStamp, RaiseBy, LineID, StationID, Category, Role, Status)
             VALUES
             (
                 CONCAT(
-                    'New maintenance breakdown created: ',
-                    @NewBreakdownID
+                    ISNULL(@LossName, ''), ' - ',
+                    ISNULL(@SubLossName, ''), ' - Additional Remark - ',
+                    ISNULL(@Remark, '')
                 ),
-                GETDATE(),
+                @Now,
                 @UserID,
                 @LineID,
                 @StationID,
-                @NotificationCategory,
-                @Role,
+                @RaiseToDepartment,
+                @RaiseToRole,
                 1
             );
 
@@ -491,16 +415,234 @@ const createBreakdown = async (payload) => {
         `);
 
         await transaction.commit();
-
         return result.recordset[0];
 
     } catch (error) {
-
-        await transaction.rollback();
-
+        try {
+            await transaction.rollback();
+        } catch (rollbackError) {
+            console.error("Rollback failed:", rollbackError.message);
+        }
         throw error;
     }
 };
+
+// const createBreakdown = async (payload) => {
+
+//     const transaction = new sql.Transaction();
+
+//     await transaction.begin();
+
+//     try {
+
+//         const request = new sql.Request(transaction);
+
+//         request.input(
+//             "BDType",
+//             sql.Int,
+//             payload.bdType
+//         );
+
+//         request.input(
+//             "RefBreakdownID",
+//             sql.BigInt,
+//             payload.refBreakdownId ?? null
+//         );
+
+//         request.input(
+//             "LineID",
+//             sql.Int,
+//             payload.lineId
+//         );
+
+//         request.input(
+//             "StationID",
+//             sql.Int,
+//             payload.stationId
+//         );
+
+//         request.input(
+//             "EquipmentID",
+//             sql.Int,
+//             payload.equipmentId
+//         );
+
+//         request.input(
+//             "LossID",
+//             sql.Int,
+//             payload.lossCode ?? null
+//         );
+
+//         request.input(
+//             "SubLossID",
+//             sql.Int,
+//             payload.subLossCode ?? null
+//         );
+
+//         request.input(
+//             "Remark",
+//             sql.NVarChar(sql.MAX),
+//             payload.remark ?? null
+//         );
+
+//         request.input(
+//             "AssignEngineer",
+//             sql.NVarChar(50),
+//             payload.assignEngineer ?? null
+//         );
+
+//         request.input(
+//             "UserID",
+//             sql.NVarChar(50),
+//             payload.userId
+//         );
+
+//         request.input(
+//             "Role",
+//             sql.NVarChar(50),
+//             payload.role
+//         );
+
+//         request.input(
+//             "NotificationCategory",
+//             sql.NVarChar(50),
+//             payload.notificationCategory ?? "Maintenance"
+//         );
+
+//         const result = await request.query(`
+//             SET NOCOUNT ON;
+
+//             IF NOT EXISTS
+//             (
+//                 SELECT 1
+//                 FROM dbo.Config_Station
+//                 WHERE StationID = @StationID
+//             )
+//                 THROW 51003,
+//                     'StationID does not exist.',
+//                     1;
+
+//             IF NOT EXISTS
+//             (
+//                 SELECT 1
+//                 FROM dbo.Config_Equipment
+//                 WHERE EquipmentID = @EquipmentID
+//                   AND StationID = @StationID
+//             )
+//                 THROW 51004,
+//                     'Equipment does not belong to the selected station.',
+//                     1;
+
+//             DECLARE @Now DATETIME = GETDATE();
+//             DECLARE @NewBreakdownID BIGINT;
+
+//             DECLARE @InitialStatus INT =
+//                 CASE
+//                     WHEN NULLIF(@AssignEngineer, '') IS NULL
+//                     THEN 1
+//                     ELSE 3
+//                 END;
+
+//             INSERT INTO dbo.Maint_BreakDown_Log
+//             (
+//                 BDTicketType,
+//                 RefBreakdownID,
+//                 StationID,
+//                 EquipmentID,
+//                 LossID,
+//                 SubLossID,
+//                 ProdDate,
+//                 ProdShift,
+//                 BDStartTime,
+//                 BDMaintTicket,
+//                 BDRemark,
+//                 TotalBDTime,
+//                 TotalBDCount,
+//                 AssignedUserID,
+//                 BDAssignOpenTime,
+//                 BDStatus
+//             )
+//             VALUES
+//             (
+//                 @BDType,
+//                 @RefBreakdownID,
+//                 @StationID,
+//                 @EquipmentID,
+//                 @LossID,
+//                 @SubLossID,
+//                 CAST(@Now AS DATE),
+
+//                 CASE
+//                     WHEN CAST(@Now AS TIME) >= '07:00'
+//                      AND CAST(@Now AS TIME) < '16:00'
+//                     THEN 'A'
+
+//                     WHEN CAST(@Now AS TIME) >= '16:00'
+//                       OR CAST(@Now AS TIME) < '01:00'
+//                     THEN 'B'
+
+//                     ELSE 'C'
+//                 END,
+
+//                 @Now,
+//                 1,
+//                 @Remark,
+//                 0,
+//                 0,
+//                 NULLIF(@AssignEngineer, ''),
+//                 CASE
+//                     WHEN NULLIF(@AssignEngineer, '') IS NULL
+//                     THEN NULL
+//                     ELSE @Now
+//                 END,
+//                 @InitialStatus
+//             );
+
+//             SET @NewBreakdownID = SCOPE_IDENTITY();
+
+//             INSERT INTO dbo.NotificationManagement
+//             (
+//                 NotificationDesc,
+//                 TimeStamp,
+//                 RaiseBy,
+//                 LineID,
+//                 StationID,
+//                 Category,
+//                 Role,
+//                 Status
+//             )
+//             VALUES
+//             (
+//                 CONCAT(
+//                     'New maintenance breakdown created: ',
+//                     @NewBreakdownID
+//                 ),
+//                 GETDATE(),
+//                 @UserID,
+//                 @LineID,
+//                 @StationID,
+//                 @NotificationCategory,
+//                 @Role,
+//                 1
+//             );
+
+//             SELECT
+//                 @NewBreakdownID AS BreakdownID,
+//                 @InitialStatus AS BDStatus,
+//                 @AssignEngineer AS AssignedUserID;
+//         `);
+
+//         await transaction.commit();
+
+//         return result.recordset[0];
+
+//     } catch (error) {
+
+//         await transaction.rollback();
+
+//         throw error;
+//     }
+// };
 
 
 module.exports = {

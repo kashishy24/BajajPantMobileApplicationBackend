@@ -12,16 +12,12 @@ const getTicketReasons = async () => {
 
 };
 
-const getTicketReasonRequiredFields = async (
-    departmentId,
-    reasonName
-) => {
-
+const getTicketReasonRequiredFields = async (reasonName) => {
+ 
     return await productionRepository.getTicketReasonRequiredFields(
-        departmentId,
         reasonName
     );
-
+ 
 };
 
 const getDepartments = async () => {
