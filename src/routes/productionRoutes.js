@@ -115,6 +115,11 @@ router.post(
     productionController.closeProductionCall
 );
 
+router.post(
+    "/update-ticket",
+    productionController.updateTicket
+);
+
 router.post("/breakdowns", productionController.createBreakdown);
 
 module.exports = router;

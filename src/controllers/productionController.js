@@ -891,6 +891,86 @@ const createBreakdown = async (req, res) => {
   }
 };
 
+const updateTicket = async (req, res) => {
+    try {
+        const {
+            ticketId,
+            lineId,
+            stationId,
+            activityId,
+            partId,
+            equipmentId,
+            breakdownId,
+            engineNo,
+            userId,
+            reasonId,
+            remark,
+            expectedClosure,
+            actionBy,
+            role
+        } = req.body;
+
+        if (!ticketId) {
+            return errorResponse(res, "TicketID is required");
+        }
+
+        if (!lineId) {
+            return errorResponse(res, "LineID is required");
+        }
+
+        if (!stationId) {
+            return errorResponse(res, "StationID is required");
+        }
+
+        if (!userId) {
+            return errorResponse(res, "UserID is required");
+        }
+
+        if (!reasonId) {
+            return errorResponse(res, "ReasonID is required");
+        }
+
+        if (!actionBy) {
+            return errorResponse(res, "ActionBy is required");
+        }
+
+        if (!role) {
+            return errorResponse(res, "Role is required");
+        }
+
+        const result = await productionService.updateTicket({
+            ticketId,
+            lineId,
+            stationId,
+            activityId,
+            partId,
+            equipmentId,
+            breakdownId,
+            engineNo,
+            userId,
+            reasonId,
+            remark,
+            expectedClosure,
+            actionBy,
+            role
+        });
+
+        return successResponse(
+            res,
+            result,
+            "Ticket updated successfully"
+        );
+
+    } catch (error) {
+        console.error("Update Ticket Error:", error);
+
+        return errorResponse(
+            res,
+            error.message || "Failed to update ticket"
+        );
+    }
+};
+
 module.exports = {
     getLatestTicketID,
     getTicketReasons,
@@ -912,5 +992,6 @@ module.exports = {
     getProductionCallLogs,
     acknowledgeProductionCall,
     closeProductionCall,
-    createBreakdown
+    createBreakdown,
+    updateTicket
 };

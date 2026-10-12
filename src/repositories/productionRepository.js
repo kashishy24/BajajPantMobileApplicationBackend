@@ -2356,6 +2356,232 @@ const createBreakdown = async (payload) => {
     }
 };
 
+const updateTicket = async ({
+    ticketId,
+    lineId,
+    stationId,
+    activityId,
+    partId,
+    equipmentId,
+    breakdownId,
+    engineNo,
+    userId,
+    reasonId,
+    remark,
+    expectedClosure,
+    actionBy,
+    role
+}) => {
+
+    const request = new sql.Request();
+
+    request.input("TicketID", sql.Int, ticketId);
+    request.input("LineID", sql.Int, lineId);
+    request.input("StationID", sql.Int, stationId);
+    request.input("ActivityID", sql.Int, activityId ?? null);
+    request.input("PartID", sql.NVarChar(20), partId ?? null);
+    request.input("EquipmentID", sql.Int, equipmentId ?? null);
+    request.input("BreakdownID", sql.Int, breakdownId ?? null);
+    request.input("EngineNo", sql.NVarChar(14), engineNo ?? null);
+    request.input("UserID", sql.NVarChar(50), userId);
+    request.input("ReasonID", sql.Int, reasonId);
+    request.input("Remark", sql.NVarChar(sql.MAX), remark ?? null);
+    request.input("ExpectedClosure", sql.Date, expectedClosure ?? null);
+    request.input("ActionBy", sql.NVarChar(50), actionBy);
+    request.input("Role", sql.NVarChar(50), role);
+
+    const result = await request.query(`
+        SET NOCOUNT ON;
+        SET XACT_ABORT ON;
+
+        BEGIN TRY
+
+            BEGIN TRANSACTION;
+
+            DECLARE @NewTrackingSeqNo INT;
+            DECLARE @ReasonName NVARCHAR(100);
+            DECLARE @DepartmentID INT;
+            DECLARE @DepartmentName NVARCHAR(100);
+
+            /* 1. Get User Department */
+            SELECT TOP 1
+                @DepartmentID = U.DepartmentID
+            FROM Config_User U
+            WHERE U.UserID = @UserID;
+
+            IF @DepartmentID IS NULL
+            BEGIN
+                THROW 50001, 'User not found or DepartmentID not configured', 1;
+            END;
+
+            /* 2. Get Department Name */
+            SELECT TOP 1
+                @DepartmentName = D.DepartmentName
+            FROM Config_Department D
+            WHERE D.DepartmentID = @DepartmentID;
+
+            IF @DepartmentName IS NULL
+            BEGIN
+                THROW 50002, 'Department not found for UserID', 1;
+            END;
+
+            /* 3. Get Reason Name */
+            SELECT TOP 1
+                @ReasonName = ReasonName
+            FROM Config_TicketReason
+            WHERE UID = @ReasonID;
+
+            IF @ReasonName IS NULL
+            BEGIN
+                THROW 50003, 'Reason not found for ReasonID', 1;
+            END;
+
+            /* 4. Next TrackingSeqNo for this existing TicketID */
+            SELECT
+                @NewTrackingSeqNo = MAX(TrackingSeqNo) + 1
+            FROM TicketManagement WITH (UPDLOCK, HOLDLOCK)
+            WHERE TicketID = @TicketID;
+
+            IF @NewTrackingSeqNo IS NULL
+            BEGIN
+                THROW 50004, 'Ticket not found for TicketID', 1;
+            END;
+
+            /* 5. Insert new TicketManagement row (same TicketID) */
+            INSERT INTO TicketManagement
+            (
+                TicketID,
+                TimeStamp,
+                LineID,
+                StationID,
+                ActivityID,
+                PartID,
+                EquipmentID,
+                BreakdownID,
+                EngineNo,
+                RaiseBy,
+                Reason,
+                ActionBy,
+                Remark,
+                TrackingSeqNo,
+                ExpectedClosure,
+                TicketStatus
+            )
+            VALUES
+            (
+                @TicketID,
+                GETDATE(),
+                @LineID,
+                @StationID,
+                @ActivityID,
+                @PartID,
+                @EquipmentID,
+                @BreakdownID,
+                @EngineNo,
+                @DepartmentName,
+                @ReasonName,
+                @ActionBy,
+                @Remark,
+                @NewTrackingSeqNo,
+                @ExpectedClosure,
+                1
+            );
+
+            /* 6. Insert NotificationManagement */
+            INSERT INTO NotificationManagement
+            (
+                NotificationDesc,
+                TimeStamp,
+                RaiseBy,
+                Category,
+                LineID,
+                StationID,
+                Role,
+                Status
+            )
+            VALUES
+            (
+                @ReasonName,
+                GETDATE(),
+                @UserID,
+                @ActionBy,
+                @LineID,
+                @StationID,
+                @Role,
+                1
+            );
+
+            /* 7. Return the new ticket row */
+            SELECT
+                UID,
+                TicketID,
+                TimeStamp,
+                LineID,
+                StationID,
+                ActivityID,
+                PartID,
+                EquipmentID,
+                BreakdownID,
+                EngineNo,
+                RaiseBy,
+                Reason,
+                ActionBy,
+                Remark,
+                TrackingSeqNo,
+                ExpectedClosure,
+                TicketStatus
+            FROM TicketManagement
+            WHERE TicketID = @TicketID
+              AND TrackingSeqNo = @NewTrackingSeqNo;
+
+            /* 8. Return the created notification */
+            SELECT TOP 1
+                NotificationID,
+                NotificationDesc,
+                TimeStamp,
+                RaiseBy,
+                Category,
+                LineID,
+                StationID,
+                Role,
+                Status
+            FROM NotificationManagement
+            WHERE RaiseBy = @UserID
+              AND LineID = @LineID
+              AND StationID = @StationID
+              AND NotificationDesc = @ReasonName
+            ORDER BY NotificationID DESC;
+
+            /* 9. Additional info */
+            SELECT
+                @TicketID AS TicketID,
+                @NewTrackingSeqNo AS TrackingSeqNo,
+                @DepartmentID AS DepartmentID,
+                @DepartmentName AS RaiseBy,
+                @ReasonID AS ReasonID,
+                @ReasonName AS ReasonName;
+
+            COMMIT TRANSACTION;
+
+        END TRY
+
+        BEGIN CATCH
+
+            IF @@TRANCOUNT > 0
+                ROLLBACK TRANSACTION;
+
+            THROW;
+
+        END CATCH;
+    `);
+
+    return {
+        ticket: result.recordsets[0][0],
+        notification: result.recordsets[1][0],
+        details: result.recordsets[2][0]
+    };
+};
+
 module.exports = {
     getLatestTicketID,
     getTicketReasons,
@@ -2377,5 +2603,6 @@ module.exports = {
     getProductionCallLogs,
     acknowledgeProductionCall,
     closeProductionCall,
-    createBreakdown
+    createBreakdown,
+    updateTicket
 };

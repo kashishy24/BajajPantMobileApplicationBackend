@@ -233,6 +233,41 @@ const createBreakdown = async (payload) => {
   });
 };
 
+const updateTicket = async ({
+    ticketId,
+    lineId,
+    stationId,
+    activityId,
+    partId,
+    equipmentId,
+    breakdownId,
+    engineNo,
+    userId,
+    reasonId,
+    remark,
+    expectedClosure,
+    actionBy,
+    role
+}) => {
+
+    return await productionRepository.updateTicket({
+        ticketId,
+        lineId,
+        stationId,
+        activityId,
+        partId,
+        equipmentId,
+        breakdownId,
+        engineNo,
+        userId,
+        reasonId,
+        remark,
+        expectedClosure,
+        actionBy,
+        role
+    });
+};
+
 module.exports = {
     getLatestTicketID,
     getTicketReasons,
@@ -254,5 +289,6 @@ module.exports = {
     getProductionCallLogs,
     acknowledgeProductionCall,
     closeProductionCall,
-    createBreakdown
+    createBreakdown,
+    updateTicket
 };
