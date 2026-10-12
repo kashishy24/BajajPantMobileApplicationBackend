@@ -9,6 +9,10 @@ const getAssignedBreakdowns = async (userId) => {
   return result;
 };
 
+const getMaintenanceOperators = async () => {
+  return await repository.getMaintenanceOperators();
+};
+
 const assignBreakdown = async (payload) => {
   const { breakdownId, lossCode, subLossCode, prodRemark, userId } =
     payload;
@@ -139,13 +143,27 @@ const getSubLossCodes = async (lossId) => {
   return repository.getSubLossCodes(id);
 };
 
+const getEquipmentByStation = async (stationId) => {
+  const id = Number(stationId);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    const err = new Error("A valid StationID is required.");
+    err.status = 400;
+    throw err;
+  }
+
+  return await repository.getEquipmentByStation(id);
+};
+
 module.exports = {
   getAssignedBreakdowns,
+  getMaintenanceOperators,
   assignBreakdown,
   closeBreakdown,
   createBreakdown,
   getOpenBreakdowns,
   getBreakdownById,
   getLossCodes,
-  getSubLossCodes
+  getSubLossCodes,
+  getEquipmentByStation
 };

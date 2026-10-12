@@ -41,6 +41,35 @@ const getAssignedBreakdowns = async (userId) => {
     return result.recordset;
 };
 
+const getMaintenanceOperators = async () => {
+    const request = new sql.Request();
+
+    request.input("DepartmentName", sql.NVarChar(100), "Maintenance");
+    request.input("RoleName", sql.NVarChar(100), "Operator");
+
+    const result = await request.query(`
+        SELECT
+            U.UserID,
+            U.UserName,
+            U.EmailID,
+            U.MobileNo,
+            U.DepartmentID,
+            D.DepartmentName,
+            U.DepartmentRoleID,
+            R.RoleName
+        FROM dbo.Config_User U
+        INNER JOIN dbo.Config_Department D
+            ON D.DepartmentID = U.DepartmentID
+        INNER JOIN dbo.Config_Role R
+            ON R.RoleID = U.DepartmentRoleID
+        WHERE D.DepartmentName = @DepartmentName
+          AND R.RoleName = @RoleName
+        ORDER BY U.UserName;
+    `);
+
+    return result.recordset;
+};
+
 const assignBreakdown = async ({
     breakdownId,
     lossCode,
@@ -553,6 +582,28 @@ const getSubLossCodes = async (lossId) => {
     return result.recordset;
 };
 
+const getEquipmentByStation = async (stationId) => {
+    const request = new sql.Request();
+
+    request.input("StationID", sql.Int, stationId);
+
+    const result = await request.query(`
+        SELECT
+            E.EquipmentID,
+            E.StationID,
+            E.EquipmentTypeID,
+            E.EquipmentName,
+            E.EquipmentDesc
+        FROM dbo.Config_Equipment E
+        WHERE E.StationID = @StationID
+        ORDER BY E.EquipmentName;
+    `);
+
+    return result.recordset;
+};
+
+module.exports = { getEquipmentByStation };
+
 module.exports = {
     getAssignedBreakdowns,
     assignBreakdown,
@@ -561,5 +612,7 @@ module.exports = {
     getOpenBreakdowns,
     getBreakdownById,
     getLossCodes,
-    getSubLossCodes
+    getSubLossCodes,
+    getMaintenanceOperators,
+    getEquipmentByStation
 };

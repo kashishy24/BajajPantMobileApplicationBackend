@@ -115,4 +115,6 @@ router.post(
     productionController.closeProductionCall
 );
 
+router.post("/breakdowns", productionController.createBreakdown);
+
 module.exports = router;

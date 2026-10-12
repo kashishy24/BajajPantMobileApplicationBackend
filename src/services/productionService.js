@@ -215,6 +215,24 @@ const closeProductionCall = async (
 
 };
 
+const createBreakdown = async (payload) => {
+  const required = ["ticketId", "bdType", "lineId", "stationId", "equipmentId",
+                    "raiseToDepartment", "raiseToRole", "userId"];
+
+  for (const key of required) {
+    if (payload[key] === undefined || payload[key] === null || payload[key] === "") {
+      const err = new Error(`${key} is required.`);
+      err.status = 400;
+      throw err;
+    }
+  }
+
+  return await productionRepository.createBreakdown({
+    ...payload,
+    remark: payload.remark?.trim() || null,
+  });
+};
+
 module.exports = {
     getLatestTicketID,
     getTicketReasons,
@@ -235,5 +253,6 @@ module.exports = {
     createMaterialRequest,
     getProductionCallLogs,
     acknowledgeProductionCall,
-    closeProductionCall
+    closeProductionCall,
+    createBreakdown
 };

@@ -19,6 +19,16 @@ const getAssignedBreakdowns = async (req, res) => {
   }
 };
 
+const getMaintenanceOperators = async (req, res) => {
+  try {
+    const data = await service.getMaintenanceOperators();
+
+    return successResponse(res, data, "Maintenance operators fetched successfully.");
+  } catch (error) {
+    return errorResponse(res, error.message);
+  }
+};
+
 const assignBreakdown = async (req, res) => {
   try {
     const data = await service.assignBreakdown(req.body);
@@ -97,13 +107,25 @@ const getSubLossCodes = async (req, res) => {
   }
 };
 
+const getEquipmentByStation = async (req, res) => {
+  try {
+    const data = await service.getEquipmentByStation(req.params.stationId);
+
+    return successResponse(res, data, "Equipment fetched successfully.");
+  } catch (error) {
+    return errorResponse(res, error.message, error.status === 400 ? 400 : 500);
+  }
+};
+
 module.exports = {
   getAssignedBreakdowns,
+  getMaintenanceOperators,
   assignBreakdown,
   closeBreakdown,
   createBreakdown,
   getOpenBreakdowns,
   getBreakdownById,
   getLossCodes,
-  getSubLossCodes
+  getSubLossCodes,
+  getEquipmentByStation
 };

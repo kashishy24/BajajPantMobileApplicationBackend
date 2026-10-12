@@ -2191,7 +2191,171 @@ const closeProductionCall = async (
 
     return result.recordset;
 };
-    
+
+const createBreakdown = async (payload) => {
+    const transaction = new sql.Transaction();
+    await transaction.begin();
+
+    try {
+        const request = new sql.Request(transaction);
+
+        request.input("TicketID", sql.Int, payload.ticketId);
+        request.input("BDType", sql.Int, payload.bdType);
+        request.input("RefBreakdownID", sql.BigInt, payload.refBreakdownId ?? null);
+        request.input("LineID", sql.Int, payload.lineId);
+        request.input("StationID", sql.Int, payload.stationId);
+        request.input("EquipmentID", sql.Int, payload.equipmentId);
+        request.input("LossID", sql.Int, payload.lossCode ?? null);
+        request.input("SubLossID", sql.Int, payload.subLossCode ?? null);
+        request.input("Remark", sql.NVarChar(sql.MAX), payload.remark ?? null);
+        request.input("UserID", sql.NVarChar(50), payload.userId);
+        request.input("RaiseToDepartment", sql.NVarChar(50), payload.raiseToDepartment);
+        request.input("RaiseToRole", sql.NVarChar(50), payload.raiseToRole);
+
+        const result = await request.query(`
+            SET NOCOUNT ON;
+            SET XACT_ABORT ON;
+
+            DECLARE @Now DATETIME = GETDATE();
+            DECLARE @NewBreakdownID BIGINT;
+            DECLARE @LossName NVARCHAR(200) = NULL;
+            DECLARE @SubLossName NVARCHAR(200) = NULL;
+            DECLARE @ProdShift NVARCHAR(10);
+            DECLARE @RaiseByDepartment NVARCHAR(50);
+            DECLARE @NewTotalBDCount INT;
+
+            -- 1. ProdShift
+            SELECT @ProdShift = ParameterValue
+            FROM dbo.ApplicationSetting
+            WHERE ParameterName = 'ProdShift'
+              AND LineID = @LineID;
+
+            IF @ProdShift IS NULL
+                THROW 51010, 'ProdShift setting not found for this line.', 1;
+
+            -- 2. Validations
+            IF NOT EXISTS (SELECT 1 FROM dbo.Config_Line WHERE LineID = @LineID)
+                THROW 51013, 'LineID does not exist.', 1;
+
+            IF NOT EXISTS (SELECT 1 FROM dbo.Config_Station WHERE StationID = @StationID)
+                THROW 51003, 'StationID does not exist.', 1;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM dbo.Config_Equipment
+                WHERE EquipmentID = @EquipmentID AND StationID = @StationID
+            )
+                THROW 51004, 'Equipment does not belong to the selected station.', 1;
+
+            IF @RefBreakdownID IS NOT NULL
+               AND NOT EXISTS (
+                    SELECT 1 FROM dbo.Maint_BreakDown_Log
+                    WHERE BreakdownID = @RefBreakdownID
+               )
+                THROW 51008, 'RefBreakdownID does not exist.', 1;
+
+            -- 4. TicketID must be unique
+            IF EXISTS (SELECT 1 FROM dbo.TicketManagement WHERE TicketID = @TicketID)
+                THROW 51011, 'TicketID already exists.', 1;
+
+            -- 5. Raiser's department
+            SELECT @RaiseByDepartment = D.DepartmentName
+            FROM dbo.Config_User U
+            INNER JOIN dbo.Config_Department D
+                ON D.DepartmentID = U.DepartmentID
+            WHERE U.UserID = @UserID;
+
+            IF @RaiseByDepartment IS NULL
+                THROW 51012, 'User or user department not found.', 1;
+
+            -- 6. TotalBDCount
+            SELECT TOP 1 @NewTotalBDCount = ISNULL(TotalBDCount, 0) + 1
+            FROM dbo.Maint_BreakDown_Log WITH (UPDLOCK, HOLDLOCK)
+            ORDER BY BreakdownID DESC;
+
+            SET @NewTotalBDCount = ISNULL(@NewTotalBDCount, 1);
+
+            -- 7. Loss / SubLoss names (notification text)
+            IF @LossID IS NOT NULL
+                SELECT @LossName = LossName
+                FROM dbo.Config_LossCategory
+                WHERE LossID = @LossID;
+
+            IF @SubLossID IS NOT NULL
+                SELECT @SubLossName = SubLossName
+                FROM dbo.Config_SubLossCategory
+                WHERE SubLossID = @SubLossID;
+
+            -- 8. Breakdown log (always unassigned -> status 1)
+            INSERT INTO dbo.Maint_BreakDown_Log
+            (
+                BDTicketType, RefBreakdownID, StationID, EquipmentID,
+                LossID, SubLossID, ProdDate, ProdShift,
+                BDStartTime, BDMaintTicket, BDRemark, BDTicketOpenTime
+                TotalBDTime, TotalBDCount,
+                AssignedUserID, BDAssignOpenTime, BDStatus
+            )
+            VALUES
+            (
+                @BDType, @RefBreakdownID, @StationID, @EquipmentID,
+                @LossID, @SubLossID,
+                CAST(@Now AS DATE), @ProdShift,
+                @Now, 2, @Remark, @Now,
+                0, @NewTotalBDCount,
+                NULL, NULL, 1
+            );
+
+            SET @NewBreakdownID = SCOPE_IDENTITY();
+
+            -- 10. Ticket
+            INSERT INTO dbo.TicketManagement
+            (
+                TicketID, TimeStamp, LineID, StationID,
+                ActivityID, PartID, EquipmentID, BreakdownID, EngineNo,
+                RaiseBy, Reason, ActionBy, Remark,
+                TrackingSeqNo, ExpectedClosure, TicketStatus
+            )
+            VALUES
+            (
+                @TicketID, @Now, @LineID, @StationID,
+                NULL, NULL, @EquipmentID, CAST(@NewBreakdownID AS INT), NULL,
+                @RaiseByDepartment, 'Breakdown', @RaiseToDepartment, @Remark,
+                1, NULL, 1
+            );
+
+            -- 11. Notification
+            INSERT INTO dbo.NotificationManagement
+            (NotificationDesc, TimeStamp, RaiseBy, LineID, StationID, Category, Role, Status)
+            VALUES
+            (
+                CONCAT(
+                    ISNULL(@LossName, ''), ' - ',
+                    ISNULL(@SubLossName, ''), ' - Additional Remark - ',
+                    ISNULL(@Remark, '')
+                ),
+                @Now, @UserID, @LineID, @StationID,
+                @RaiseToDepartment, @RaiseToRole, 1
+            );
+
+            -- 12. Result
+            SELECT
+                @NewBreakdownID AS BreakdownID,
+                @TicketID AS TicketID,
+                1 AS BDStatus;
+        `);
+
+        await transaction.commit();
+        return result.recordset[0];
+
+    } catch (error) {
+        try {
+            await transaction.rollback();
+        } catch (rollbackError) {
+            console.error("Rollback failed:", rollbackError.message);
+        }
+        throw error;
+    }
+};
+
 module.exports = {
     getLatestTicketID,
     getTicketReasons,
@@ -2212,5 +2376,6 @@ module.exports = {
     createMaterialRequest,
     getProductionCallLogs,
     acknowledgeProductionCall,
-    closeProductionCall
+    closeProductionCall,
+    createBreakdown
 };

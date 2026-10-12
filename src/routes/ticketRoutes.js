@@ -71,4 +71,9 @@ router.post(
     ticketController.confirmIPQCHold
 );
 
+router.post(
+    "/fqc-hold",
+    ticketController.createFQCHold
+);
+
 module.exports = router;

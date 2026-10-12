@@ -79,6 +79,22 @@ const confirmIPQCHoldService = async ({ ticketId }) => {
     return result;
 };
 
+const createFQCHold = async (data) => {
+
+    if (!data.ticketId) {
+        throw new Error("TicketID is required");
+    }
+
+    if (Number(data.holdType) === 2 && !data.partId) {
+        throw new Error("PartID is required for Batch Hold");
+    }
+
+    if (Number(data.holdType) === 3 && !data.planId) {
+        throw new Error("PlanID is required for Plan Hold");
+    }
+
+    return await ticketRepository.createFQCHold(data);
+};
 
 module.exports = {
     getStations,
@@ -92,5 +108,6 @@ module.exports = {
     getOpenNotifications,
     closeNotifications,
     createIPQCHold, 
-    confirmIPQCHoldService
+    confirmIPQCHoldService,
+    createFQCHold
 };

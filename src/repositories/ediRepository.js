@@ -1205,7 +1205,7 @@ const storeMaterial = async (
             };
         }
     }
-};
+}
 
 const createExecuteIQC = async (
     ediNumber,
@@ -1611,7 +1611,7 @@ const createExecuteIQC = async (
 
 
     return BatchID;
-};
+}
 
 const confirmIQC = async (
     ediNumber,
@@ -2251,7 +2251,7 @@ const validateQuantity = async (
         gap,
         status
     };}
-};
+}
 
 const getMaterialStatus = async (partID) => {
 
@@ -2285,7 +2285,7 @@ const getMaterialStatus = async (partID) => {
     `);
 
     return result.recordset;
-};
+}
 
 const getValidatedMaterials = async () => {
 
@@ -2309,7 +2309,7 @@ const getValidatedMaterials = async () => {
 
         return result.recordset;
 
-};
+}
 
 const bypassMaterial = async (
     ediNumber,
@@ -2591,7 +2591,7 @@ const bypassMaterial = async (
         rowsAffected: result.rowsAffected[0]
     };
 
-};
+}
 
 function getCurrentShiftDetails() {
     const now = new Date();
@@ -2679,7 +2679,7 @@ const getSqlType = (value) => {
     }
 
     return sql.NVarChar;
-};
+}
 
 const sampleCollection = async (
     batchId,
@@ -3340,7 +3340,7 @@ const sampleCollection = async (
         partId,
         ediNumber
     };
-};
+}
 
 const getIQCHoldList = async () => {
 
@@ -3369,7 +3369,7 @@ const getIQCHoldList = async () => {
         `);
 
     return result.recordset;
-};
+}
 
 const iqcCleared = async (
     ediNumber,
@@ -3596,7 +3596,7 @@ const iqcCleared = async (
     return {
         rowsAffected: result.rowsAffected[0]
     };
-};
+}
 
 const getIQCClearedList = async () => {
 
@@ -3622,7 +3622,7 @@ const getIQCClearedList = async () => {
         `);
 
     return result.recordset;
-};
+}
 
 const getGapMaterials = async () => {
 
@@ -3652,7 +3652,7 @@ const getGapMaterials = async () => {
         `);
 
     return result.recordset;
-};
+}
 
 const iqcFailed = async (
     ediNumber,
@@ -3862,7 +3862,7 @@ const iqcFailed = async (
     return {
         rowsAffected: result.rowsAffected[0]
     };
-};
+}
 
 const getHoldMaterialList = async () => {
 
@@ -3896,7 +3896,7 @@ const getHoldMaterialList = async () => {
      console.log("HOLD MATERIAL RESULT:");
     console.log(result.recordset);
     return result.recordset;
-};
+}
 
 const confirmHoldMaterial = async ({
     EDINumber,
@@ -4160,7 +4160,7 @@ const confirmHoldMaterial = async ({
 
         throw error;
     }
-};
+}
 
 const confirmAuditList = async (
     auditListID,
@@ -5136,7 +5136,7 @@ const confirmAuditList = async (
 
         throw error;
     }
-};
+}
     
 module.exports = {
     getEDIList,

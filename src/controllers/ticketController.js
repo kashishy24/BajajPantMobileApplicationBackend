@@ -482,6 +482,131 @@ const confirmIPQCHold = async (req, res) => {
     }
 };
 
+const createFQCHold = async (req, res) => {
+
+    try {
+
+        const {
+            ticketId,
+            auditListId,
+            auditPointId,
+            auditListName,
+            auditPointName,
+            auditGroup,
+            holdType,
+            partId,
+            planId,
+            forwardQty,
+            backwordQty,
+            role,
+            lineId,
+            stationId,
+            activityId,
+            equipmentId,
+            breakdownId,
+            engineNo,
+            expectedClosure,
+            userId,
+            actionBy
+        } = req.body;
+
+        /* =====================================================
+           BASIC VALIDATION
+           ===================================================== */
+
+        if (!ticketId) {
+            return errorResponse(res, "TicketID is required");
+        }
+
+        if (!auditListId) {
+            return errorResponse(res, "AuditListID is required");
+        }
+
+        if (!auditPointId) {
+            return errorResponse(res, "AuditPointID is required");
+        }
+
+        if (!auditListName) {
+            return errorResponse(res, "AuditListName is required");
+        }
+
+        if (!auditPointName) {
+            return errorResponse(res, "AuditPointName is required");
+        }
+
+        if (!auditGroup) {
+            return errorResponse(res, "AuditGroup is required");
+        }
+
+        if (!holdType) {
+            return errorResponse(res, "HoldType is required");
+        }
+
+        if (![1, 2, 3].includes(Number(holdType))) {
+            return errorResponse(res, "HoldType must be 1, 2 or 3");
+        }
+
+        if (!lineId) {
+            return errorResponse(res, "LineID is required");
+        }
+
+        if (!engineNo) {
+            return errorResponse(res, "EngineNo is required");
+        }
+
+        if (!userId) {
+            return errorResponse(res, "UserID is required");
+        }
+
+        if (!actionBy) {
+            return errorResponse(res, "ActionBy is required");
+        }
+
+        /* =====================================================
+           SERVICE
+           ===================================================== */
+
+        const result = await ticketService.createFQCHold({
+            ticketId,
+            auditListId,
+            auditPointId,
+            auditListName,
+            auditPointName,
+            auditGroup,
+            holdType,
+            partId,
+            planId,
+            forwardQty,
+            backwordQty,
+            role,
+            lineId,
+            stationId,
+            activityId,
+            equipmentId,
+            breakdownId,
+            engineNo,
+            expectedClosure,
+            userId,
+            actionBy
+        });
+
+        return successResponse(
+            res,
+            result,
+            "FQC hold ticket created successfully"
+        );
+
+    } catch (error) {
+
+        console.error("createFQCHold error:", error);
+
+        return errorResponse(
+            res,
+            error.message || "Failed to create FQC hold ticket"
+        );
+    }
+};
+
 module.exports = {
     getStations,
     getLines,
@@ -494,5 +619,6 @@ module.exports = {
     getOpenNotifications,
     closeNotifications,
     createIPQCHold,
-    confirmIPQCHold
+    confirmIPQCHold,
+    createFQCHold
 };

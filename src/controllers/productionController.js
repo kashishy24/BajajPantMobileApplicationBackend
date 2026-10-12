@@ -874,6 +874,23 @@ const closeProductionCall = async (req, res) => {
     }
 };
 
+const createBreakdown = async (req, res) => {
+  try {
+    const data = await productionService.createBreakdown({
+      ...req.body,
+      userId: req.user?.userId ?? req.body.userId,
+    });
+
+    return successResponse(res, data, "Breakdown and ticket created successfully.", 201);
+  } catch (error) {
+    const isBusinessError =
+      error.status === 400 ||
+      (error.number >= 51000 && error.number < 52000 && error.number !== 51010);
+
+    return errorResponse(res, error.message, isBusinessError ? 400 : 500);
+  }
+};
+
 module.exports = {
     getLatestTicketID,
     getTicketReasons,
@@ -894,5 +911,6 @@ module.exports = {
     createMaterialRequest,
     getProductionCallLogs,
     acknowledgeProductionCall,
-    closeProductionCall
+    closeProductionCall,
+    createBreakdown
 };
