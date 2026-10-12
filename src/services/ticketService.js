@@ -93,6 +93,14 @@ const createFQCHold = async (data) => {
         throw new Error("PlanID is required for Plan Hold");
     }
 
+    if (![9, 10, 11, 12].includes(Number(data.documentId))) {
+        throw new Error("DocumentID must be 9, 10, 11 or 12");
+    }
+    
+    if (!data.uid) {
+        throw new Error("UID is required");
+    }
+
     return await ticketRepository.createFQCHold(data);
 };
 

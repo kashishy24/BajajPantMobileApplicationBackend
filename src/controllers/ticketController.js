@@ -507,7 +507,9 @@ const createFQCHold = async (req, res) => {
             engineNo,
             expectedClosure,
             userId,
-            actionBy
+            actionBy,
+            documentId,  
+            uid  
         } = req.body;
 
         /* =====================================================
@@ -562,6 +564,18 @@ const createFQCHold = async (req, res) => {
             return errorResponse(res, "ActionBy is required");
         }
 
+        if (!documentId) {
+            return errorResponse(res, "DocumentID is required");
+        }
+
+        if (![9, 10, 11, 12].includes(Number(documentId))) {
+            return errorResponse(res, "DocumentID must be 9, 10, 11 or 12");
+        }
+
+        if (!uid) {
+            return errorResponse(res, "UID is required");
+        }
+
         /* =====================================================
            SERVICE
            ===================================================== */
@@ -587,7 +601,9 @@ const createFQCHold = async (req, res) => {
             engineNo,
             expectedClosure,
             userId,
-            actionBy
+            actionBy,
+            documentId,
+            uid
         });
 
         return successResponse(

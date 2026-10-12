@@ -1560,7 +1560,9 @@ const createFQCHold = async ({
     engineNo,
     expectedClosure,
     userId,
-    actionBy
+    actionBy,
+    documentId,   
+    uid
 }) => {
 
     const request = new sql.Request();
@@ -1586,6 +1588,8 @@ const createFQCHold = async ({
     request.input("ExpectedClosure", sql.Date, expectedClosure ?? null);
     request.input("UserID", sql.NVarChar(50), userId);
     request.input("ActionBy", sql.NVarChar(50), actionBy);
+    request.input("DocumentID", sql.Int, documentId);
+    request.input("ExecutionUID", sql.Int, uid);
 
     const result = await request.query(`
 
@@ -1631,6 +1635,15 @@ const createFQCHold = async ({
             IF @HoldType = 3 AND @PlanID IS NULL
                 THROW 52016, 'PlanID is required for Plan Hold', 1;
 
+            IF @DocumentID IS NULL
+                THROW 52018, 'DocumentID is required', 1;
+            
+            IF @DocumentID NOT IN (9, 10, 11, 12)
+                THROW 52019, 'Invalid DocumentID. Allowed values are 9, 10, 11, 12', 1;
+            
+            IF @ExecutionUID IS NULL
+                THROW 52020, 'UID is required', 1;
+
             /* ================= 2. USER DEPARTMENT ================= */
 
             SELECT TOP 1 @DepartmentID = U.DepartmentID
@@ -1666,6 +1679,24 @@ const createFQCHold = async ({
                 @EquipmentID, @BreakdownID, @EngineNo, @DepartmentName, @AuditListName, @ActionBy,
                 @AuditPointName, 1, @ExpectedClosure, 1
             );
+
+            /* ================= 4A. LINK TICKET TO AUDIT POINT EXECUTION ================= */
+
+            IF @DocumentID = 10
+            BEGIN
+                UPDATE QA_Execute_FQC_EngPerformanceAuditPoint
+                SET TicketID = @TicketID
+                WHERE UID = @ExecutionUID;
+            END
+            ELSE  -- 9, 11, 12
+            BEGIN
+                UPDATE QA_Execute_FQC_EngInbuiltAuditPoint
+                SET TicketID = @TicketID
+                WHERE UID = @ExecutionUID;
+            END;
+            
+            IF @@ROWCOUNT = 0
+                THROW 52021, 'Audit point execution record not found for given DocumentID and UID', 1;
 
             /* ================= 5. NOTIFICATION ================= */
 
@@ -1940,6 +1971,9 @@ const createFQCHold = async ({
             WHERE TicketID = @TicketID
             ORDER BY DefectLogID;
 
+            -- recordsets[5]
+            SELECT @DocumentID AS DocumentID, @ExecutionUID AS UID, @TicketID AS TicketID;
+
             COMMIT TRANSACTION;
 
         END TRY
@@ -1960,7 +1994,8 @@ const createFQCHold = async ({
         notification: result.recordsets[1][0],
         engineHold: result.recordsets[2][0],
         wip: result.recordsets[3],
-        defectLogs: result.recordsets[4]
+        defectLogs: result.recordsets[4],
+        auditPointLink: result.recordsets[5][0]
     };
 };
 
