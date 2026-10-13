@@ -377,6 +377,154 @@ const getExecutedIPQCCheckpointDetails = async (req, res) => {
   }
 };
 
+//get stationName api
+
+
+// Get Station ID and Description API
+const getStations = async (req, res) => {
+  try {
+    const request = new sql.Request();
+
+    const result = await request.query(`
+      SELECT
+        StationID,
+        StationName
+      FROM dbo.Config_Station
+      ORDER BY StationID;
+    `);
+
+    const responseData = result.recordset || [];
+
+    return successResponse(
+      res,
+      responseData,
+      "Station Details Fetched Successfully"
+    );
+
+  } catch (error) {
+    console.error("Error fetching Station Details:", error);
+
+    return errorResponse(
+      res,
+      error.message,
+      500
+    );
+  }
+};
+
+//Create Call api
+
+const createNotification = async (req, res) => {
+  try {
+    const {
+      AuditPointName,
+      UserID,
+      StationID
+    } = req.body;
+
+    // Validation
+    if (
+      AuditPointName === undefined ||
+      AuditPointName === null ||
+      String(AuditPointName).trim() === "" ||
+      UserID === undefined ||
+      UserID === null ||
+      String(UserID).trim() === ""
+    ) {
+      return errorResponse(
+        res,
+        "AuditPointName and UserID are required",
+        400
+      );
+    }
+
+    const request = new sql.Request();
+
+    const result = await request
+   .input(
+  "NotificationDesc",
+  sql.NVarChar(500),
+  `IPQC - ${String(AuditPointName).trim()}`
+)
+      .input(
+        "TimeStamp",
+        sql.DateTime,
+        new Date()
+      )
+      .input(
+        "RaiseBy",
+        sql.Int,
+        parseInt(UserID)
+      )
+      .input(
+        "LineID",
+        sql.Int,
+        1
+      )
+      .input(
+        "StationID",
+        sql.Int,
+        StationID == null ? null : parseInt(StationID)
+      )
+      .input(
+        "Category",
+        sql.NVarChar(100),
+        "Production"
+      )
+      .input(
+        "Role",
+        sql.NVarChar(100),
+        "Supervisor"
+      )
+      .input(
+        "Status",
+        sql.Int,
+        1
+      )
+      .query(`
+        INSERT INTO dbo.NotificationManagement
+        (
+          NotificationDesc,
+          [TimeStamp],
+          RaiseBy,
+          LineID,
+          StationID,
+          Category,
+          [Role],
+          [Status]
+        )
+        OUTPUT INSERTED.*
+        VALUES
+        (
+          @NotificationDesc,
+          @TimeStamp,
+          @RaiseBy,
+          @LineID,
+          @StationID,
+          @Category,
+          @Role,
+          @Status
+        );
+      `);
+
+    const responseData = result.recordset || [];
+
+    return successResponse(
+      res,
+      responseData,
+      "Notification Created Successfully"
+    );
+
+  } catch (error) {
+    console.error("Error creating Notification:", error);
+
+    return errorResponse(
+      res,
+      error.message,
+      500
+    );
+  }
+};
 
 //supervisor Login
 //Approved btn api
@@ -497,5 +645,7 @@ module.exports = {
   getWaitingForApprovalIPQCAuditList,
   getExecutedIPQCCheckpointDetails,
   approveIPQCAudit,
-  getApprovedIPQCAuditList
+  getApprovedIPQCAuditList,
+  createNotification,
+  getStations
 };    

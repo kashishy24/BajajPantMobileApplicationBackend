@@ -16,6 +16,8 @@ router.get("/getWaitingForApprovalIPQCAuditList",IPQCHome.getWaitingForApprovalI
 router.get("/getExecutedIPQCCheckpointDetails",IPQCHome.getExecutedIPQCCheckpointDetails);
 router.post("/approveIPQCAudit",IPQCHome.approveIPQCAudit);
 router.get("/getApprovedIPQCAuditList",IPQCHome.getApprovedIPQCAuditList);
+router.post("/createNotification",IPQCHome.createNotification);
+router.get("/getStations",IPQCHome.getStations);
 
 
 module.exports = router;

@@ -1112,6 +1112,121 @@ const getExecutedFQCEngPerformanceCheckpointDetails = async (req, res) => {
   }
 };
 
+
+//Create Call api
+
+const createNotification = async (req, res) => {
+  try {
+    const {
+      AuditPointName,
+      UserID,
+      StationID
+    } = req.body;
+
+    // Validation
+    if (
+      AuditPointName === undefined ||
+      AuditPointName === null ||
+      String(AuditPointName).trim() === "" ||
+      UserID === undefined ||
+      UserID === null ||
+      String(UserID).trim() === ""
+    ) {
+      return errorResponse(
+        res,
+        "AuditPointName and UserID are required",
+        400
+      );
+    }
+
+    const request = new sql.Request();
+
+    const result = await request
+   .input(
+  "NotificationDesc",
+  sql.NVarChar(500),
+  `FQC - ${String(AuditPointName).trim()}`
+)
+      .input(
+        "TimeStamp",
+        sql.DateTime,
+        new Date()
+      )
+      .input(
+        "RaiseBy",
+        sql.Int,
+        parseInt(UserID)
+      )
+      .input(
+        "LineID",
+        sql.Int,
+        1
+      )
+      .input(
+        "StationID",
+        sql.Int,
+        StationID == null ? null : parseInt(StationID)
+      )
+      .input(
+        "Category",
+        sql.NVarChar(100),
+        "Production"
+      )
+      .input(
+        "Role",
+        sql.NVarChar(100),
+        "Supervisor"
+      )
+      .input(
+        "Status",
+        sql.Int,
+        1
+      )
+      .query(`
+        INSERT INTO dbo.NotificationManagement
+        (
+          NotificationDesc,
+          [TimeStamp],
+          RaiseBy,
+          LineID,
+          StationID,
+          Category,
+          [Role],
+          [Status]
+        )
+        OUTPUT INSERTED.*
+        VALUES
+        (
+          @NotificationDesc,
+          @TimeStamp,
+          @RaiseBy,
+          @LineID,
+          @StationID,
+          @Category,
+          @Role,
+          @Status
+        );
+      `);
+
+    const responseData = result.recordset || [];
+
+    return successResponse(
+      res,
+      responseData,
+      "Notification Created Successfully"
+    );
+
+  } catch (error) {
+    console.error("Error creating Notification:", error);
+
+    return errorResponse(
+      res,
+      error.message,
+      500
+    );
+  }
+};
+
 //----------------Supervisor Login----
 
 //For Approve btn
@@ -1195,6 +1310,8 @@ const approveFQCAudit = async (req, res) => {
   }
 };
 
+
+
 module.exports = {
   
   getAuditListByGroup,
@@ -1220,6 +1337,8 @@ module.exports = {
   getExecutedFQCEngInbuiltCheckpointDetails,
   getExecutedFQCEngPerformanceCheckpointDetails,
 
-  approveFQCAudit
+
+  approveFQCAudit,
+  createNotification
 
 };

@@ -30,10 +30,16 @@ router.put("/updateFQCEngPerformanceEngineNo",FQCHome.updateFQCEngPerformanceEng
 router.post("/moveToNextFQCSampleLevelEngPerformance",FQCHome.moveToNextFQCSampleLevelEngPerformance);
 router.post("/submitFQCEngPerformanceAudit",FQCHome.submitFQCEngPerformanceAudit);
 
+//Call btn api
+router.post("/createNotification",FQCHome.createNotification);
 
 //Checkpoint Details Screen
 router.get("/getExecutedFQCEngInbuiltCheckpointDetails",FQCHome.getExecutedFQCEngInbuiltCheckpointDetails);
 router.get("/getExecutedFQCEngPerformanceCheckpointDetails",FQCHome.getExecutedFQCEngPerformanceCheckpointDetails);
+
+
+
+
 
 
 //Supervisor Login
