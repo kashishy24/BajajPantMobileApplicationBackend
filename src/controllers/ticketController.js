@@ -296,7 +296,8 @@ const createIPQCHold = async (req, res) => {
             engineNo,
             expectedClosure,
             userId,
-            actionBy
+            actionBy,
+            uid 
         } = req.body;
 
 
@@ -388,6 +389,13 @@ const createIPQCHold = async (req, res) => {
             );
         }
 
+        if (!uid) {
+            return errorResponse(
+                res,
+                "UID is required"
+            );
+        }
+
 
         /* =====================================================
            SERVICE
@@ -426,7 +434,8 @@ const createIPQCHold = async (req, res) => {
             expectedClosure,
 
             userId,
-            actionBy
+            actionBy,
+            uid
         });
 
 

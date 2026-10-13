@@ -62,6 +62,10 @@ const closeNotifications = async (notificationIds) => {
 
 const createIPQCHold = async (data) => {
 
+    if (!data.uid) {
+        throw new Error("UID is required");
+    }
+
     return await ticketRepository.createIPQCHold(data);
 
 };

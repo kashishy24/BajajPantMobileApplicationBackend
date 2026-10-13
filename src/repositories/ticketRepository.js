@@ -355,7 +355,8 @@ const createIPQCHold = async ({
     engineNo,
     expectedClosure,
     userId,
-    actionBy
+    actionBy,
+    uid
 }) => {
 
     const request = new sql.Request();
@@ -454,6 +455,12 @@ const createIPQCHold = async ({
         actionBy
     );
 
+    request.input(
+        "ExecutionUID",
+        sql.Int,
+        uid
+    );
+
     const result = await request.query(`
 
         SET NOCOUNT ON;
@@ -510,6 +517,11 @@ const createIPQCHold = async ({
             IF @HoldType NOT IN (1, 2, 3)
             BEGIN
                 THROW 50007, 'Invalid HoldType. Allowed values are 1, 2, 3', 1;
+            END;
+
+            IF @ExecutionUID IS NULL
+            BEGIN
+                THROW 50015, 'UID is required', 1;
             END;
 
             /* =====================================================
@@ -605,6 +617,19 @@ const createIPQCHold = async ({
                 @ExpectedClosure,
                 1
             );
+
+            /* =====================================================
+               5A. LINK TICKET TO IPQC AUDIT POINT EXECUTION
+               ===================================================== */
+            
+            UPDATE QA_Execute_IPQC_AuditPoint
+            SET TicketID = @TicketID
+            WHERE UID = @ExecutionUID;
+            
+            IF @@ROWCOUNT = 0
+            BEGIN
+                THROW 50016, 'IPQC audit point execution record not found for given UID', 1;
+            END;
 
 
             /* =====================================================
