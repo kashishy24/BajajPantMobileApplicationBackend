@@ -587,7 +587,7 @@ const approveIPQCAudit = async (req, res) => {
         ApprovedByRemark ?? null
       )
       .execute(
-        "Tab_Q_ApproveIPQCAudit"
+        "Tab_Q_IPQC_ApproveIPQCAudit"
       );
 
     return successResponse(
