@@ -384,7 +384,7 @@ const getTicketDetails = async (ticketId) => {
     request.input("TicketID", sql.Int, ticketId);
 
     const result = await request.query(`
-        SELECT
+                SELECT
             TM.UID,
             TM.TicketID,
             TM.TimeStamp,
@@ -401,8 +401,14 @@ const getTicketDetails = async (ticketId) => {
             TM.Remark,
             TM.TrackingSeqNo,
             TM.ExpectedClosure,
-            TM.TicketStatus
+            TM.TicketStatus,
+            TM.UpdatedBy AS RemarkedBy,
+            U.UserName As updateByName,
+            U.DepartmentID As UpdateByDepartment,
+            D.DepartmentName As UpdateByDepartmentName
         FROM TicketManagement TM
+        INNER JOIN Config_User U ON TM.UserID = U.UserID
+        INNER JOIN Config_Department D ON U.DepartmentID = D.DepartmentID
         WHERE TM.TicketID = @TicketID
     `);
 
