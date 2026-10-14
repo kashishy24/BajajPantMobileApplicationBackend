@@ -378,11 +378,11 @@ const getOpenProductionTickets = async () => {
 };
 
 const getTicketDetails = async (ticketId) => {
-
+ 
     const request = new sql.Request();
-
+ 
     request.input("TicketID", sql.Int, ticketId);
-
+ 
     const result = await request.query(`
                 SELECT
             TM.UID,
@@ -407,14 +407,14 @@ const getTicketDetails = async (ticketId) => {
             U.DepartmentID As UpdateByDepartment,
             D.DepartmentName As UpdateByDepartmentName
         FROM TicketManagement TM
-        INNER JOIN Config_User U ON TM.UserID = U.UserID
-        INNER JOIN Config_Department D ON U.DepartmentID = D.DepartmentID
+        Left JOIN Config_User U ON TM.UpdatedBy = U.UserID
+        Left JOIN Config_Department D ON U.DepartmentID = D.DepartmentID
         WHERE TM.TicketID = @TicketID
     `);
-
+ 
     return result.recordset;
 };
-
+ 
 const openTicketNotify = async ({
     ticketId,
     userId,
