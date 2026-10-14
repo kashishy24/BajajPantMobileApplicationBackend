@@ -43,9 +43,9 @@ const closeBreakdown = async (payload) => {
     throw new Error("ResolutionType must be 1 (Permanent) or 2 (Temporary).");
   }
 
-  if (resolutionType === 1 && !permanentResolution) {
-    throw new Error("PermanentResolution is required for permanent closure.");
-  }
+  // if (resolutionType === 2 && !permanentResolution) {
+  //   throw new Error("PermanentResolution is required for permanent closure.");
+  // }
 
   return repository.closeBreakdown(payload);
 };
