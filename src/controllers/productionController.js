@@ -903,6 +903,7 @@ const updateTicket = async (req, res) => {
             breakdownId,
             engineNo,
             userId,
+            raiseBy, 
             reasonId,
             remark,
             expectedClosure,
@@ -924,6 +925,10 @@ const updateTicket = async (req, res) => {
 
         if (!userId) {
             return errorResponse(res, "UserID is required");
+        }
+
+        if (!raiseBy) {    
+            return errorResponse(res, "RaiseBy is required");
         }
 
         if (!reasonId) {
@@ -948,6 +953,7 @@ const updateTicket = async (req, res) => {
             breakdownId,
             engineNo,
             userId,
+            raiseBy, 
             reasonId,
             remark,
             expectedClosure,

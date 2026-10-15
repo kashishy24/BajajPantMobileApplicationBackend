@@ -215,7 +215,8 @@ const createTicketNotifySubmit = async ({
                 Remark,
                 TrackingSeqNo,
                 ExpectedClosure,
-                TicketStatus
+                TicketStatus,
+                UpdatedBy    
             )
             VALUES
             (
@@ -234,7 +235,8 @@ const createTicketNotifySubmit = async ({
                 @Remark,
                 1,
                 @ExpectedClosure,
-                1
+                1,
+                @UserID 
             );
 
 
@@ -287,7 +289,8 @@ const createTicketNotifySubmit = async ({
                 Remark,
                 TrackingSeqNo,
                 ExpectedClosure,
-                TicketStatus
+                TicketStatus,
+                UpdatedBy
             FROM TicketManagement
             WHERE TicketID = @TicketID;
 
@@ -2372,6 +2375,7 @@ const updateTicket = async ({
     breakdownId,
     engineNo,
     userId,
+    raiseBy,
     reasonId,
     remark,
     expectedClosure,
@@ -2390,6 +2394,7 @@ const updateTicket = async ({
     request.input("BreakdownID", sql.Int, breakdownId ?? null);
     request.input("EngineNo", sql.NVarChar(14), engineNo ?? null);
     request.input("UserID", sql.NVarChar(50), userId);
+    request.input("RaiseBy", sql.NVarChar(100), raiseBy);
     request.input("ReasonID", sql.Int, reasonId);
     request.input("Remark", sql.NVarChar(sql.MAX), remark ?? null);
     request.input("ExpectedClosure", sql.Date, expectedClosure ?? null);
@@ -2406,32 +2411,8 @@ const updateTicket = async ({
 
             DECLARE @NewTrackingSeqNo INT;
             DECLARE @ReasonName NVARCHAR(100);
-            DECLARE @DepartmentID INT;
-            DECLARE @DepartmentName NVARCHAR(100);
 
-            /* 1. Get User Department */
-            SELECT TOP 1
-                @DepartmentID = U.DepartmentID
-            FROM Config_User U
-            WHERE U.UserID = @UserID;
-
-            IF @DepartmentID IS NULL
-            BEGIN
-                THROW 50001, 'User not found or DepartmentID not configured', 1;
-            END;
-
-            /* 2. Get Department Name */
-            SELECT TOP 1
-                @DepartmentName = D.DepartmentName
-            FROM Config_Department D
-            WHERE D.DepartmentID = @DepartmentID;
-
-            IF @DepartmentName IS NULL
-            BEGIN
-                THROW 50002, 'Department not found for UserID', 1;
-            END;
-
-            /* 3. Get Reason Name */
+            /* 1. Get Reason Name */
             SELECT TOP 1
                 @ReasonName = ReasonName
             FROM Config_TicketReason
@@ -2471,7 +2452,8 @@ const updateTicket = async ({
                 Remark,
                 TrackingSeqNo,
                 ExpectedClosure,
-                TicketStatus
+                TicketStatus,
+                UpdatedBy   
             )
             VALUES
             (
@@ -2484,13 +2466,14 @@ const updateTicket = async ({
                 @EquipmentID,
                 @BreakdownID,
                 @EngineNo,
-                @DepartmentName,
+                @RaiseBy, 
                 @ReasonName,
                 @ActionBy,
                 @Remark,
                 @NewTrackingSeqNo,
                 @ExpectedClosure,
-                1
+                1,
+                @UserID
             );
 
             /* 6. Insert NotificationManagement */
@@ -2535,7 +2518,8 @@ const updateTicket = async ({
                 Remark,
                 TrackingSeqNo,
                 ExpectedClosure,
-                TicketStatus
+                TicketStatus,
+                UpdatedBy    
             FROM TicketManagement
             WHERE TicketID = @TicketID
               AND TrackingSeqNo = @NewTrackingSeqNo;
@@ -2562,8 +2546,7 @@ const updateTicket = async ({
             SELECT
                 @TicketID AS TicketID,
                 @NewTrackingSeqNo AS TrackingSeqNo,
-                @DepartmentID AS DepartmentID,
-                @DepartmentName AS RaiseBy,
+                @RaiseBy AS RaiseBy,
                 @ReasonID AS ReasonID,
                 @ReasonName AS ReasonName;
 
