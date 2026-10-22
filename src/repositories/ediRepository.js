@@ -2318,6 +2318,7 @@ const getValidatedMaterials = async () => {
                 SELECT
                     MR.EDINumber,
                     MR.BatchID,
+                    MR.Status,
                     V.VendorName,
                     CP.PartID,
                     CP.PartDesc AS PartName,
