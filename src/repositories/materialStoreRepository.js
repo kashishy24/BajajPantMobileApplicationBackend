@@ -437,10 +437,19 @@ const getMaterialAlertList = async () => {
             MRP.PlanID,
             MRP.PartID,
             CP.PartName,
-            MRP.ToBeIssuedQty as RequiredQty
+            MRP.ToBeIssuedQty as RequiredQty,
+            CB.MaterialMoveType
         FROM Material_Running_Plan MRP
         INNER JOIN Config_PartVariant CP
             ON MRP.PartID = CP.PartID
+        
+        INNER JOIN Prod_Plan PP
+            ON MRP.PlanID = PP.PlanID
+
+        INNER JOIN Config_BOM CB
+            ON PP.SKUID = CB.SKUID
+            AND MRP.PartID = CB.PartID
+
         WHERE
             MRP.Status = 1
             AND MRP.MesControlled = 1
@@ -466,7 +475,7 @@ const issueMaterial = async (planId, partId, requiredQty) => {
         WHERE
             PlanID = @PlanID
             AND PartID = @PartID
-            AND RequiredQty = @RequiredQty
+            AND ToBeIssuedQty = @RequiredQty
             AND Status = 1
     `);
 
@@ -484,32 +493,6 @@ const issueMaterial = async (planId, partId, requiredQty) => {
     };
 };
 
-// const getMaterialDeliverList = async () => {
-//     const result = await new sql.Request().query(`
-//         SELECT
-//             MRP.PlanID,
-//             MRP.PartID,
-//             CP.PartName,
-//             MRP.MesControlled,
-//             CASE
-//                 WHEN MRP.MesControlled = 1
-//                     THEN MRP.ToBeIssuedQty
-//                 WHEN MRP.MesControlled = 2
-//                     THEN MRP.TotalRequiredQty
-//             END AS DeliverQty
-//         FROM Material_Running_Plan MRP
-//         INNER JOIN Config_PartVariant CP
-//             ON MRP.PartID = CP.PartID
-//         WHERE
-//             MRP.Status = 2
-//         ORDER BY
-//             MRP.PlanID,
-//             CP.PartName
-//     `);
-
-//     return result.recordset;
-// };
-
 const getMaterialDeliverList = async () => {
     const result = await new sql.Request().query(`
         SELECT
@@ -525,7 +508,9 @@ const getMaterialDeliverList = async () => {
                     THEN MRP.TotalRequiredQty
             END AS DeliverQty,
 
-            CB.MaterialMoveType
+            CS.StationName,
+            CB.MaterialMoveType,
+            CS.StationID
 
         FROM Material_Running_Plan MRP
 
@@ -535,6 +520,9 @@ const getMaterialDeliverList = async () => {
         INNER JOIN Config_BOM CB
             ON PP.SKUID = CB.SKUID
             AND MRP.PartID = CB.PartID
+
+        INNER JOIN Config_Station CS
+            ON CB.StationID = CS.StationID
 
         INNER JOIN Config_PartVariant CP
             ON MRP.PartID = CP.PartID

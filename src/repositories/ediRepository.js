@@ -2329,6 +2329,12 @@ const getValidatedMaterials = async () => {
                 INNER JOIN Config_PartVariant CP
                     ON MR.PartID = CP.PartID
                 WHERE MR.Status = 3
+                 AND NOT EXISTS (
+                SELECT 1
+                FROM QA_Execute_IQC_AuditList AL
+                WHERE AL.PartID = CP.PartID
+                  AND AL.Status IN (1, 2)
+          )
                 ORDER BY MR.EDINumber
             `);
 
@@ -3917,9 +3923,6 @@ const getHoldMaterialList = async () => {
         WHERE ISNULL(MR.HoldQty, 0) > 0
         ORDER BY MR.Timestamp DESC
     `);
-
-     console.log("HOLD MATERIAL RESULT:");
-    console.log(result.recordset);
     return result.recordset;
 }
 
