@@ -782,6 +782,124 @@ const getProductionCallLogs = async (req, res) => {
     }
 };
 
+const getUnassignedDowntime = async (req, res) => {
+
+    try {
+
+        const data =
+            await productionService.getUnassignedDowntime();
+
+        return successResponse(
+            res,
+            data,
+            "Unassigned Downtime Fetched Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
+const updateDowntime = async (req, res) => {
+
+    try {
+
+        const downtimeId = Number(req.params.downtimeId);
+        const {
+            lossId,
+            subLossId,
+            reason,
+            lastUpdatedTime,
+            userId
+        } = req.body || {};
+
+        if (!Number.isInteger(downtimeId) || downtimeId <= 0) {
+            return errorResponse(res, "A valid DowntimeID is required", 400);
+        }
+
+        const requiredFields = [
+            "lossId",
+            "subLossId",
+            "reason",
+            "lastUpdatedTime",
+            "userId"
+        ];
+        const missingFields = requiredFields.filter(
+            field => !Object.prototype.hasOwnProperty.call(req.body || {}, field)
+        );
+
+        if (missingFields.length > 0) {
+            return errorResponse(
+                res,
+                `Required fields are missing: ${missingFields.join(", ")}`,
+                400
+            );
+        }
+
+        if (
+            (lossId !== null && !Number.isInteger(lossId)) ||
+            (subLossId !== null && !Number.isInteger(subLossId))
+        ) {
+            return errorResponse(
+                res,
+                "LossID and SubLossID must be integers or null",
+                400
+            );
+        }
+
+        if (typeof reason !== "string") {
+            return errorResponse(res, "Reason must be a string", 400);
+        }
+
+        if (
+            typeof lastUpdatedTime !== "string" ||
+            Number.isNaN(Date.parse(lastUpdatedTime))
+        ) {
+            return errorResponse(
+                res,
+                "LastUpdatedTime must be a valid date/time string",
+                400
+            );
+        }
+
+        if (!Number.isInteger(userId)) {
+            return errorResponse(res, "UserID must be an integer", 400);
+        }
+
+        const data = await productionService.updateDowntime({
+            downtimeId,
+            lossId,
+            subLossId,
+            reason,
+            lastUpdatedTime: new Date(lastUpdatedTime),
+            userId
+        });
+
+        if (!data) {
+            return errorResponse(res, "Downtime record not found", 404);
+        }
+
+        return successResponse(
+            res,
+            data,
+            "Downtime Updated Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
 const acknowledgeProductionCall = async (req, res) => {
 
     try {
@@ -996,6 +1114,8 @@ module.exports = {
     getNonMesControlledMaterials,
     createMaterialRequest,
     getProductionCallLogs,
+    getUnassignedDowntime,
+    updateDowntime,
     acknowledgeProductionCall,
     closeProductionCall,
     createBreakdown,
