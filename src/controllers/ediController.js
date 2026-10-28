@@ -161,8 +161,6 @@ const getValidatedMaterials = async (
 ) => {
     try {
 
-         console.log("GET /api/edi/validated called");
-
         const data =
             await ediService.getValidatedMaterials();
 

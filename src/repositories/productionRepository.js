@@ -215,7 +215,8 @@ const createTicketNotifySubmit = async ({
                 Remark,
                 TrackingSeqNo,
                 ExpectedClosure,
-                TicketStatus
+                TicketStatus,
+                UpdatedBy    
             )
             VALUES
             (
@@ -234,7 +235,8 @@ const createTicketNotifySubmit = async ({
                 @Remark,
                 1,
                 @ExpectedClosure,
-                1
+                1,
+                @UserID 
             );
 
 
@@ -287,7 +289,8 @@ const createTicketNotifySubmit = async ({
                 Remark,
                 TrackingSeqNo,
                 ExpectedClosure,
-                TicketStatus
+                TicketStatus,
+                UpdatedBy
             FROM TicketManagement
             WHERE TicketID = @TicketID;
 
@@ -378,13 +381,13 @@ const getOpenProductionTickets = async () => {
 };
 
 const getTicketDetails = async (ticketId) => {
-
+ 
     const request = new sql.Request();
-
+ 
     request.input("TicketID", sql.Int, ticketId);
-
+ 
     const result = await request.query(`
-        SELECT
+                SELECT
             TM.UID,
             TM.TicketID,
             TM.TimeStamp,
@@ -401,14 +404,20 @@ const getTicketDetails = async (ticketId) => {
             TM.Remark,
             TM.TrackingSeqNo,
             TM.ExpectedClosure,
-            TM.TicketStatus
+            TM.TicketStatus,
+            TM.UpdatedBy AS RemarkedBy,
+            U.UserName As updateByName,
+            U.DepartmentID As UpdateByDepartment,
+            D.DepartmentName As UpdateByDepartmentName
         FROM TicketManagement TM
+        Left JOIN Config_User U ON TM.UpdatedBy = U.UserID
+        Left JOIN Config_Department D ON U.DepartmentID = D.DepartmentID
         WHERE TM.TicketID = @TicketID
     `);
-
+ 
     return result.recordset;
 };
-
+ 
 const openTicketNotify = async ({
     ticketId,
     userId,
@@ -2070,6 +2079,100 @@ const getProductionCallLogs = async () => {
     return result.recordset;
 };
 
+const getUnassignedDowntime = async () => {
+
+    const result = await new sql.Request().query(`
+       SELECT
+    d.DowntimeID,
+    d.[TimeStamp],
+    d.SubAsslyLineID,
+    d.StationID,
+    st.StationName,
+    d.ProdDate,
+    d.ProdShift,
+    d.StartTime,
+    d.EndTime,
+    d.CurrentDT,
+    d.TotalDT,
+    d.LossID,
+    l.LossName,
+    d.SubLossID,
+    sl.SubLossName,
+    d.[4MLossID],
+    d.UserID,
+    d.Reason,
+    d.LastUpdatedTime
+FROM dbo.Perf_Downtime d
+LEFT JOIN dbo.Config_Station st
+    ON d.StationID = st.StationID
+LEFT JOIN dbo.Config_LossCategory l
+    ON d.LossID = l.LossID
+LEFT JOIN dbo.Config_SubLossCategory sl
+    ON d.SubLossID = sl.SubLossID
+WHERE
+    (
+        d.LossID IS NULL
+        OR LTRIM(RTRIM(CONVERT(NVARCHAR(50), d.LossID))) = ''
+    )
+    AND (
+        d.SubLossID IS NULL
+        OR LTRIM(RTRIM(CONVERT(NVARCHAR(50), d.SubLossID))) = ''
+    )
+ORDER BY d.DowntimeID DESC
+    `);
+
+    return result.recordset;
+};
+
+const updateDowntime = async ({
+    downtimeId,
+    lossId,
+    subLossId,
+    reason,
+    lastUpdatedTime,
+    userId
+}) => {
+
+    const request = new sql.Request();
+
+    request.input("DowntimeID", sql.Int, downtimeId);
+    request.input("LossID", sql.Int, lossId);
+    request.input("SubLossID", sql.Int, subLossId);
+    request.input("Reason", sql.NVarChar(sql.MAX), reason);
+    request.input("LastUpdatedTime", sql.DateTime, lastUpdatedTime);
+    request.input("UserID", sql.Int, userId);
+
+    const result = await request.query(`
+        UPDATE dbo.Perf_Downtime
+        SET
+            LossID = @LossID,
+            SubLossID = @SubLossID,
+            Reason = @Reason,
+            LastUpdatedTime = @LastUpdatedTime,
+            UserID = @UserID
+        OUTPUT
+            INSERTED.DowntimeID,
+            INSERTED.[TimeStamp],
+            INSERTED.SubAsslyLineID,
+            INSERTED.StationID,
+            INSERTED.ProdDate,
+            INSERTED.ProdShift,
+            INSERTED.StartTime,
+            INSERTED.EndTime,
+            INSERTED.CurrentDT,
+            INSERTED.TotalDT,
+            INSERTED.LossID,
+            INSERTED.SubLossID,
+            INSERTED.[4MLossID],
+            INSERTED.UserID,
+            INSERTED.Reason,
+            INSERTED.LastUpdatedTime
+        WHERE DowntimeID = @DowntimeID
+    `);
+
+    return result.recordset[0] || null;
+};
+
 const acknowledgeProductionCall = async (
     rowId,
     lineId,
@@ -2366,6 +2469,7 @@ const updateTicket = async ({
     breakdownId,
     engineNo,
     userId,
+    raiseBy,
     reasonId,
     remark,
     expectedClosure,
@@ -2384,6 +2488,7 @@ const updateTicket = async ({
     request.input("BreakdownID", sql.Int, breakdownId ?? null);
     request.input("EngineNo", sql.NVarChar(14), engineNo ?? null);
     request.input("UserID", sql.NVarChar(50), userId);
+    request.input("RaiseBy", sql.NVarChar(100), raiseBy);
     request.input("ReasonID", sql.Int, reasonId);
     request.input("Remark", sql.NVarChar(sql.MAX), remark ?? null);
     request.input("ExpectedClosure", sql.Date, expectedClosure ?? null);
@@ -2400,32 +2505,8 @@ const updateTicket = async ({
 
             DECLARE @NewTrackingSeqNo INT;
             DECLARE @ReasonName NVARCHAR(100);
-            DECLARE @DepartmentID INT;
-            DECLARE @DepartmentName NVARCHAR(100);
 
-            /* 1. Get User Department */
-            SELECT TOP 1
-                @DepartmentID = U.DepartmentID
-            FROM Config_User U
-            WHERE U.UserID = @UserID;
-
-            IF @DepartmentID IS NULL
-            BEGIN
-                THROW 50001, 'User not found or DepartmentID not configured', 1;
-            END;
-
-            /* 2. Get Department Name */
-            SELECT TOP 1
-                @DepartmentName = D.DepartmentName
-            FROM Config_Department D
-            WHERE D.DepartmentID = @DepartmentID;
-
-            IF @DepartmentName IS NULL
-            BEGIN
-                THROW 50002, 'Department not found for UserID', 1;
-            END;
-
-            /* 3. Get Reason Name */
+            /* 1. Get Reason Name */
             SELECT TOP 1
                 @ReasonName = ReasonName
             FROM Config_TicketReason
@@ -2465,7 +2546,8 @@ const updateTicket = async ({
                 Remark,
                 TrackingSeqNo,
                 ExpectedClosure,
-                TicketStatus
+                TicketStatus,
+                UpdatedBy   
             )
             VALUES
             (
@@ -2478,13 +2560,14 @@ const updateTicket = async ({
                 @EquipmentID,
                 @BreakdownID,
                 @EngineNo,
-                @DepartmentName,
+                @RaiseBy, 
                 @ReasonName,
                 @ActionBy,
                 @Remark,
                 @NewTrackingSeqNo,
                 @ExpectedClosure,
-                1
+                1,
+                @UserID
             );
 
             /* 6. Insert NotificationManagement */
@@ -2529,7 +2612,8 @@ const updateTicket = async ({
                 Remark,
                 TrackingSeqNo,
                 ExpectedClosure,
-                TicketStatus
+                TicketStatus,
+                UpdatedBy    
             FROM TicketManagement
             WHERE TicketID = @TicketID
               AND TrackingSeqNo = @NewTrackingSeqNo;
@@ -2556,8 +2640,7 @@ const updateTicket = async ({
             SELECT
                 @TicketID AS TicketID,
                 @NewTrackingSeqNo AS TrackingSeqNo,
-                @DepartmentID AS DepartmentID,
-                @DepartmentName AS RaiseBy,
+                @RaiseBy AS RaiseBy,
                 @ReasonID AS ReasonID,
                 @ReasonName AS ReasonName;
 
@@ -2601,6 +2684,8 @@ module.exports = {
     getNonMesControlledMaterials,
     createMaterialRequest,
     getProductionCallLogs,
+    getUnassignedDowntime,
+    updateDowntime,
     acknowledgeProductionCall,
     closeProductionCall,
     createBreakdown,

@@ -187,6 +187,18 @@ const getProductionCallLogs = async () => {
 
 };
 
+const getUnassignedDowntime = async () => {
+
+    return await productionRepository.getUnassignedDowntime();
+
+};
+
+const updateDowntime = async (payload) => {
+
+    return await productionRepository.updateDowntime(payload);
+
+};
+
 const acknowledgeProductionCall = async (
     rowId,
     lineId,
@@ -243,6 +255,7 @@ const updateTicket = async ({
     breakdownId,
     engineNo,
     userId,
+    raiseBy, 
     reasonId,
     remark,
     expectedClosure,
@@ -260,6 +273,7 @@ const updateTicket = async ({
         breakdownId,
         engineNo,
         userId,
+        raiseBy, 
         reasonId,
         remark,
         expectedClosure,
@@ -287,6 +301,8 @@ module.exports = {
     getNonMesControlledMaterials,
     createMaterialRequest,
     getProductionCallLogs,
+    getUnassignedDowntime,
+    updateDowntime,
     acknowledgeProductionCall,
     closeProductionCall,
     createBreakdown,

@@ -122,4 +122,14 @@ router.post(
 
 router.post("/breakdowns", productionController.createBreakdown);
 
+router.get(
+    "/unassigned-downtime",
+    productionController.getUnassignedDowntime
+);
+
+router.put(
+    "/downtime/:downtimeId",
+    productionController.updateDowntime
+);
+
 module.exports = router;

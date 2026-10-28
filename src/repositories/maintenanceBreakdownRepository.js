@@ -194,8 +194,8 @@ const closeBreakdown = async (payload) => {
             IF @OriginalStatus <> 3
                 THROW 51002, 'Breakdown must be assigned (status 3) before closure.', 1;
             
-            IF @AssignedUserID IS NULL OR @AssignedUserID <> @UserID
-                THROW 51005, 'Breakdown is assigned to a different user.', 1;
+            --    IF @AssignedUserID IS NULL OR @AssignedUserID <> @UserID
+            --    THROW 51005, 'Breakdown is assigned to a different user.', 1;
             
             IF @BDStartTime IS NULL
                 THROW 51011, 'BDStartTime is missing for this breakdown.', 1;
@@ -218,9 +218,16 @@ const closeBreakdown = async (payload) => {
             ORDER BY TrackingSeqNo DESC;
             
             -- line: from ticket if available, otherwise from the station master
-            SELECT @LineID = COALESCE(@TLineID, S.LineID)
-            FROM dbo.Config_Station S
-            WHERE S.StationID = @StationID;
+           SET @LineID = @TLineID;
+
+            IF @LineID IS NULL
+            BEGIN
+                SELECT @LineID = SA.LineID
+                FROM dbo.Config_Station S
+                INNER JOIN dbo.Config_SubAssemblyLine SA
+                    ON SA.SubAsslyLineID = S.SubAsslyLineID
+                WHERE S.StationID = @StationID;
+            END;
             
             IF @LineID IS NULL
                 THROW 51007, 'LineID could not be resolved.', 1;

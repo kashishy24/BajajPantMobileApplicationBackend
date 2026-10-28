@@ -49,6 +49,7 @@ const getEDIDetails = async (ediNumber) => {
         INNER JOIN Config_PartVariant CP
             ON MR.PartID = CP.PartID
         WHERE MR.EDINumber = @EDINumber
+        AND MR.Status = 2
     `);
 
     return result.recordset;
@@ -1253,6 +1254,27 @@ const createExecuteIQC = async (
         SampleQty
     } = historyResult.recordset[0];
 
+    // ============================================================
+    // 1.1 Get active SKUID from Prod_Plan
+    //     Status 2 first, then Status 1; lowest Priority wins
+    // ============================================================
+    
+    const planResult = await new sql.Request().query(`
+        SELECT TOP 1
+            SKUID
+        FROM Prod_Plan
+        WHERE Status IN (1, 2)
+        ORDER BY
+            CASE WHEN Status = 2 THEN 0 ELSE 1 END ASC,
+            Priority ASC
+    `);
+    
+    if (planResult.recordset.length === 0) {
+        throw new Error("No running (2) or pending (1) plan found in Prod_Plan.");
+    }
+    
+    const planSKUID = planResult.recordset[0].SKUID;
+
 
     // ============================================================
     // 2. Get IQC Documents
@@ -1360,7 +1382,7 @@ const createExecuteIQC = async (
                     document.DocumentName
                 )
                 .input(
-                    "Group",
+                    "DocGroup",
                     sql.NVarChar,
                     document.Group
                 )
@@ -1380,7 +1402,7 @@ const createExecuteIQC = async (
                         DocumentID,
                         DocumentNo,
                         DocumentName,
-                        [Group],
+                        AuditGroup,
                         Revision,
                         AuditInstanceID
                     )
@@ -1389,7 +1411,7 @@ const createExecuteIQC = async (
                         @DocumentID,
                         @DocumentNo,
                         @DocumentName,
-                        @Group,
+                        @DocGroup,
                         @Revision,
                         @AuditInstanceID
                     )
@@ -1414,6 +1436,7 @@ const createExecuteIQC = async (
                 sql.NVarChar,
                 partId
             )
+            .input("SKUID", sql.Int, planSKUID)
             .query(`
                 SELECT
                     AuditListID,
@@ -1425,6 +1448,7 @@ const createExecuteIQC = async (
                 WHERE
                     DocumentID = @DocumentID
                     AND PartID = @PartID
+                    AND SKUID = @SKUID
             `);
 
 
@@ -1479,7 +1503,7 @@ const createExecuteIQC = async (
                 )
                 .query(`
                     SELECT ParameterValue
-                    FROM ApplicationsSetting
+                    FROM ApplicationSetting
                     WHERE ParameterName = @ParameterName
                 `);
             
@@ -2294,6 +2318,7 @@ const getValidatedMaterials = async () => {
                 SELECT
                     MR.EDINumber,
                     MR.BatchID,
+                    MR.Status,
                     V.VendorName,
                     CP.PartID,
                     CP.PartDesc AS PartName,
@@ -2304,6 +2329,12 @@ const getValidatedMaterials = async () => {
                 INNER JOIN Config_PartVariant CP
                     ON MR.PartID = CP.PartID
                 WHERE MR.Status = 3
+                 AND NOT EXISTS (
+                SELECT 1
+                FROM QA_Execute_IQC_AuditList AL
+                WHERE AL.PartID = CP.PartID
+                  AND AL.Status IN (1, 2)
+          )
                 ORDER BY MR.EDINumber
             `);
 
@@ -3892,9 +3923,6 @@ const getHoldMaterialList = async () => {
         WHERE ISNULL(MR.HoldQty, 0) > 0
         ORDER BY MR.Timestamp DESC
     `);
-
-     console.log("HOLD MATERIAL RESULT:");
-    console.log(result.recordset);
     return result.recordset;
 }
 
