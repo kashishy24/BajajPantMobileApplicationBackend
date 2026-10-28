@@ -5,7 +5,7 @@ const IPQCHome =require("../controllers/TabAPI/Operator/IPQC/IPQCHome");
 
 
 //Operator Login
-
+ 
 //Monitoring Screen
 router.get("/getScheduleAuditList", IPQCHome.getScheduleAuditList);
 router.post("/executeIPQCAudit", IPQCHome.executeIPQCAudit);

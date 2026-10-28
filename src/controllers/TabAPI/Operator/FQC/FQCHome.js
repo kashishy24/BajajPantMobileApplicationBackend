@@ -649,6 +649,139 @@ const getFQCEngPerformanceCheckpointDetails = async (req, res) => {
   }
 };
 //------Update ok/nok value
+// const updateFQCEngPerformanceCheckpointResult = async (req, res) => {
+//   try {
+//     const {
+//       UID,
+//       SampleLevel,
+//       SampleNo,
+
+//       // Power
+//       ObservationPowerValue,
+//       ObservationPowerValueResult,
+//       ObservationPowerRPMValue,
+
+//       // Torque
+//       ObservationTorqueValue,
+//       ObservationTorqueValueResult,
+//       ObservationTorqueRPMValue,
+
+//       // Common Remark
+//       ObservationRemark
+//     } = req.body;
+
+//     // Required fields
+//     if (
+//       UID === undefined ||
+//       UID === null ||
+//       SampleLevel === undefined ||
+//       SampleLevel === null ||
+//       SampleNo === undefined ||
+//       SampleNo === null
+//     ) {
+//       return errorResponse(
+//         res,
+//         "UID, SampleLevel and SampleNo are required",
+//         400
+//       );
+//     }
+
+//     const request = new sql.Request();
+
+//     const result = await request
+//       .input(
+//         "UID",
+//         sql.Int,
+//         parseInt(UID)
+//       )
+//       .input(
+//         "SampleLevel",
+//         sql.Int,
+//         parseInt(SampleLevel)
+//       )
+//       .input(
+//         "SampleNo",
+//         sql.Int,
+//         parseInt(SampleNo)
+//       )
+
+//       // -----------------------------------------
+//       // Power
+//       // -----------------------------------------
+//       .input(
+//         "ObservationPowerValue",
+//         sql.NVarChar(500),
+//         ObservationPowerValue ?? null
+//       )
+//       .input(
+//         "ObservationPowerValueResult",
+//         sql.Int,
+//         ObservationPowerValueResult !== undefined &&
+//         ObservationPowerValueResult !== null
+//           ? parseInt(ObservationPowerValueResult)
+//           : null
+//       )
+//       .input(
+//         "ObservationPowerRPMValue",
+//         sql.NVarChar(500),
+//         ObservationPowerRPMValue ?? null
+//       )
+
+//       // -----------------------------------------
+//       // Torque
+//       // -----------------------------------------
+//       .input(
+//         "ObservationTorqueValue",
+//         sql.NVarChar(500),
+//         ObservationTorqueValue ?? null
+//       )
+//       .input(
+//         "ObservationTorqueValueResult",
+//         sql.Int,
+//         ObservationTorqueValueResult !== undefined &&
+//         ObservationTorqueValueResult !== null
+//           ? parseInt(ObservationTorqueValueResult)
+//           : null
+//       )
+//       .input(
+//         "ObservationTorqueRPMValue",
+//         sql.NVarChar(500),
+//         ObservationTorqueRPMValue ?? null
+//       )
+
+//       // -----------------------------------------
+//       // Common Remark
+//       // -----------------------------------------
+//       .input(
+//         "ObservationRemark",
+//         sql.NVarChar(500),
+//         ObservationRemark ?? null
+//       )
+
+//       .execute(
+//         "Tab_Q_FQC_UpdateEngPerformanceCheckpointResult"
+//       );
+
+//     return successResponse(
+//       res,
+//       result.recordset,
+//       "FQC Engine Performance checkpoint result updated successfully"
+//     );
+
+//   } catch (error) {
+//     console.error(
+//       "Error updating FQC Engine Performance checkpoint result:",
+//       error
+//     );
+
+//     return errorResponse(
+//       res,
+//       error.message,
+//       500
+//     );
+//   }
+// };
+
 const updateFQCEngPerformanceCheckpointResult = async (req, res) => {
   try {
     const {
@@ -672,12 +805,9 @@ const updateFQCEngPerformanceCheckpointResult = async (req, res) => {
 
     // Required fields
     if (
-      UID === undefined ||
-      UID === null ||
-      SampleLevel === undefined ||
-      SampleLevel === null ||
-      SampleNo === undefined ||
-      SampleNo === null
+      UID == null ||
+      SampleLevel == null ||
+      SampleNo == null
     ) {
       return errorResponse(
         res,
@@ -686,28 +816,35 @@ const updateFQCEngPerformanceCheckpointResult = async (req, res) => {
       );
     }
 
+    // Validate integer RPM values
+    const validateRPM = (value, fieldName) => {
+      if (
+        value != null &&
+        (!Number.isInteger(Number(value)) ||
+          !Number.isSafeInteger(Number(value)))
+      ) {
+        throw new Error(`${fieldName} must be a valid integer`);
+      }
+    };
+
+    validateRPM(
+      ObservationPowerRPMValue,
+      "ObservationPowerRPMValue"
+    );
+
+    validateRPM(
+      ObservationTorqueRPMValue,
+      "ObservationTorqueRPMValue"
+    );
+
     const request = new sql.Request();
 
     const result = await request
-      .input(
-        "UID",
-        sql.Int,
-        parseInt(UID)
-      )
-      .input(
-        "SampleLevel",
-        sql.Int,
-        parseInt(SampleLevel)
-      )
-      .input(
-        "SampleNo",
-        sql.Int,
-        parseInt(SampleNo)
-      )
+      .input("UID", sql.Int, parseInt(UID, 10))
+      .input("SampleLevel", sql.Int, parseInt(SampleLevel, 10))
+      .input("SampleNo", sql.Int, parseInt(SampleNo, 10))
 
-      // -----------------------------------------
       // Power
-      // -----------------------------------------
       .input(
         "ObservationPowerValue",
         sql.NVarChar(500),
@@ -716,20 +853,19 @@ const updateFQCEngPerformanceCheckpointResult = async (req, res) => {
       .input(
         "ObservationPowerValueResult",
         sql.Int,
-        ObservationPowerValueResult !== undefined &&
-        ObservationPowerValueResult !== null
-          ? parseInt(ObservationPowerValueResult)
-          : null
+        ObservationPowerValueResult == null
+          ? null
+          : parseInt(ObservationPowerValueResult, 10)
       )
       .input(
         "ObservationPowerRPMValue",
-        sql.NVarChar(500),
-        ObservationPowerRPMValue ?? null
+        sql.Int,
+        ObservationPowerRPMValue == null
+          ? null
+          : Number(ObservationPowerRPMValue)
       )
 
-      // -----------------------------------------
       // Torque
-      // -----------------------------------------
       .input(
         "ObservationTorqueValue",
         sql.NVarChar(500),
@@ -738,33 +874,31 @@ const updateFQCEngPerformanceCheckpointResult = async (req, res) => {
       .input(
         "ObservationTorqueValueResult",
         sql.Int,
-        ObservationTorqueValueResult !== undefined &&
-        ObservationTorqueValueResult !== null
-          ? parseInt(ObservationTorqueValueResult)
-          : null
+        ObservationTorqueValueResult == null
+          ? null
+          : parseInt(ObservationTorqueValueResult, 10)
       )
       .input(
         "ObservationTorqueRPMValue",
-        sql.NVarChar(500),
-        ObservationTorqueRPMValue ?? null
+        sql.Int,
+        ObservationTorqueRPMValue == null
+          ? null
+          : Number(ObservationTorqueRPMValue)
       )
 
-      // -----------------------------------------
-      // Common Remark
-      // -----------------------------------------
+      // Remark
       .input(
         "ObservationRemark",
         sql.NVarChar(500),
         ObservationRemark ?? null
       )
-
       .execute(
         "Tab_Q_FQC_UpdateEngPerformanceCheckpointResult"
       );
 
     return successResponse(
       res,
-      result.recordset,
+      result.recordset || [],
       "FQC Engine Performance checkpoint result updated successfully"
     );
 
@@ -777,10 +911,11 @@ const updateFQCEngPerformanceCheckpointResult = async (req, res) => {
     return errorResponse(
       res,
       error.message,
-      500
+      error.message.includes("must be a valid integer") ? 400 : 500
     );
   }
 };
+
 //---------update engine no on every sample
 const updateFQCEngPerformanceEngineNo = async (req, res) => {
   try {
