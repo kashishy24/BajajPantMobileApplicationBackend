@@ -440,13 +440,13 @@ const getMaterialAlertList = async () => {
             MRP.ToBeIssuedQty as RequiredQty,
             CB.MaterialMoveType
         FROM Material_Running_Plan MRP
-        INNER JOIN Config_PartVariant CP
+        Left JOIN Config_PartVariant CP
             ON MRP.PartID = CP.PartID
         
-        INNER JOIN Prod_Plan PP
+        Left JOIN Prod_Plan PP
             ON MRP.PlanID = PP.PlanID
 
-        INNER JOIN Config_BOM CB
+        Left JOIN Config_BOM CB
             ON PP.SKUID = CB.SKUID
             AND MRP.PartID = CB.PartID
 
@@ -462,35 +462,104 @@ const getMaterialAlertList = async () => {
     return result.recordset;
 };
 
+// const issueMaterial = async (planId, partId, requiredQty) => {
+//     const request = new sql.Request();
+
+//     request.input("PlanID", sql.Int, planId);
+//     request.input("PartID", sql.NVarChar(20), partId);
+//     request.input("RequiredQty", sql.Int, requiredQty);
+
+//     const result = await request.query(`
+//         UPDATE Material_Running_Plan
+//         SET Status = 2
+//         WHERE
+//             PlanID = @PlanID
+//             AND PartID = @PartID
+//             AND ToBeIssuedQty = @RequiredQty
+//             AND Status = 1
+//     `);
+
+//     if (result.rowsAffected[0] === 0) {
+//         throw new Error(
+//             "Material request not found or material is already issued."
+//         );
+//     }
+
+//     return {
+//         PlanID: planId,
+//         PartID: partId,
+//         RequiredQty: requiredQty,
+//         Status: 2
+//     };
+// };
+
 const issueMaterial = async (planId, partId, requiredQty) => {
-    const request = new sql.Request();
+    const transaction = new sql.Transaction();
+    await transaction.begin();
 
-    request.input("PlanID", sql.Int, planId);
-    request.input("PartID", sql.NVarChar(20), partId);
-    request.input("RequiredQty", sql.Int, requiredQty);
+    try {
+        // ------------------------------------------------------------
+        // 1. Check stock: StoreQty + LinesideQty >= RequiredQty
+        //    UPDLOCK/HOLDLOCK stops a parallel request from using the
+        //    same stock between this check and the update below
+        // ------------------------------------------------------------
+        const stockResult = await new sql.Request(transaction)
+            .input("PartID", sql.NVarChar(20), partId)
+            .query(`
+                SELECT
+                    ISNULL(SUM(StoreQty), 0)    AS StoreQty,
+                    ISNULL(SUM(LinesideCQty), 0) AS LinesideQty
+                FROM Material_Stock WITH (UPDLOCK, HOLDLOCK)
+                WHERE PartID = @PartID
+            `);
 
-    const result = await request.query(`
-        UPDATE Material_Running_Plan
-        SET Status = 2
-        WHERE
-            PlanID = @PlanID
-            AND PartID = @PartID
-            AND ToBeIssuedQty = @RequiredQty
-            AND Status = 1
-    `);
+        const { StoreQty, LinesideQty } = stockResult.recordset[0];
+        const availableQty = StoreQty + LinesideQty;
 
-    if (result.rowsAffected[0] === 0) {
-        throw new Error(
-            "Material request not found or material is already issued."
-        );
+        if (availableQty < requiredQty) {
+            throw new Error(
+                `Insufficient stock for part ${partId}. ` +
+                `Available: ${availableQty} (Store: ${StoreQty}, Lineside: ${LinesideQty}), ` +
+                `Required: ${requiredQty}.`
+            );
+        }
+
+        // ------------------------------------------------------------
+        // 2. Issue the material
+        // ------------------------------------------------------------
+        const result = await new sql.Request(transaction)
+            .input("PlanID", sql.Int, planId)
+            .input("PartID", sql.NVarChar(20), partId)
+            .input("RequiredQty", sql.Int, requiredQty)
+            .query(`
+                UPDATE Material_Running_Plan
+                SET Status = 2
+                WHERE
+                    PlanID = @PlanID
+                    AND PartID = @PartID
+                    AND ToBeIssuedQty = @RequiredQty
+                    AND Status = 1
+            `);
+
+        if (result.rowsAffected[0] === 0) {
+            throw new Error(
+                "Material request not found or material is already issued."
+            );
+        }
+
+        await transaction.commit();
+
+        return {
+            PlanID: planId,
+            PartID: partId,
+            RequiredQty: requiredQty,
+            Status: 2
+        };
+
+    } catch (err) {
+        await transaction.rollback();
+        throw err;
     }
-
-    return {
-        PlanID: planId,
-        PartID: partId,
-        RequiredQty: requiredQty,
-        Status: 2
-    };
 };
 
 const getMaterialDeliverList = async () => {

@@ -159,30 +159,48 @@ const bypassMaterial = async (data) => {
 
 };
 
+
 const sampleCollection = async (data) => {
 
-    const {
-        batchId,
-        partId,
-        userId
-    } = data;
+    const { batchId, partId, skuId, userId } = data;
 
-    if (!batchId)
-        throw new Error("Batch ID is required");
-
-    if (!partId)
-        throw new Error("Part ID is required");
-
-    if (!userId)
-        throw new Error("User ID is required");
+    if (!batchId) throw new Error("Batch ID is required");
+    if (!partId)  throw new Error("Part ID is required");
+    if (!skuId)   throw new Error("SKU ID is required");
+    if (!userId)  throw new Error("User ID is required");
 
     return await ediRepository.sampleCollection(
         batchId,
         partId,
+        skuId,
         userId
     );
-
 };
+
+// const sampleCollection = async (data) => {
+
+//     const {
+//         batchId,
+//         partId,
+//         userId
+//     } = data;
+
+//     if (!batchId)
+//         throw new Error("Batch ID is required");
+
+//     if (!partId)
+//         throw new Error("Part ID is required");
+
+//     if (!userId)
+//         throw new Error("User ID is required");
+
+//     return await ediRepository.sampleCollection(
+//         batchId,
+//         partId,
+//         userId
+//     );
+
+// };
 
 const getIQCHoldList = async () => {
 

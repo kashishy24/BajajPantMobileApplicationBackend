@@ -1259,21 +1259,34 @@ const createExecuteIQC = async (
     //     Status 2 first, then Status 1; lowest Priority wins
     // ============================================================
     
+    // const planResult = await new sql.Request().query(`
+    //     SELECT TOP 1
+    //         SKUID
+    //     FROM Prod_Plan
+    //     WHERE Status IN (1, 2)
+    //     ORDER BY
+    //         CASE WHEN Status = 2 THEN 0 ELSE 1 END ASC,
+    //         Priority ASC
+    // `);
+    
+    // if (planResult.recordset.length === 0) {
+    //     throw new Error("No running (2) or pending (1) plan found in Prod_Plan.");
+    // }
+    
+    // const planSKUID = planResult.recordset[0].SKUID;
+
+    // 1.1 Get ALL active SKUIDs from Prod_Plan (Status 1 and 2)
     const planResult = await new sql.Request().query(`
-        SELECT TOP 1
-            SKUID
+        SELECT DISTINCT SKUID
         FROM Prod_Plan
         WHERE Status IN (1, 2)
-        ORDER BY
-            CASE WHEN Status = 2 THEN 0 ELSE 1 END ASC,
-            Priority ASC
     `);
     
     if (planResult.recordset.length === 0) {
         throw new Error("No running (2) or pending (1) plan found in Prod_Plan.");
     }
     
-    const planSKUID = planResult.recordset[0].SKUID;
+    const planSKUIDs = planResult.recordset.map(r => r.SKUID);
 
 
     // ============================================================
@@ -1425,32 +1438,55 @@ const createExecuteIQC = async (
         //    even when Execute Document already exists
         // ========================================================
 
-        const auditListResult = await new sql.Request()
-            .input(
-                "DocumentID",
-                sql.Int,
-                document.DocumentID
-            )
-            .input(
-                "PartID",
-                sql.NVarChar,
-                partId
-            )
-            .input("SKUID", sql.Int, planSKUID)
-            .query(`
-                SELECT
-                    AuditListID,
-                    ModelFamilyID,
-                    ModelID,
-                    SKUID,
-                    PartID
-                FROM Config_AuditList
-                WHERE
-                    DocumentID = @DocumentID
-                    AND PartID = @PartID
-                    AND SKUID = @SKUID
-            `);
+        // const auditListResult = await new sql.Request()
+        //     .input(
+        //         "DocumentID",
+        //         sql.Int,
+        //         document.DocumentID
+        //     )
+        //     .input(
+        //         "PartID",
+        //         sql.NVarChar,
+        //         partId
+        //     )
+        //     .input("SKUID", sql.Int, planSKUID)
+        //     .query(`
+        //         SELECT
+        //             AuditListID,
+        //             ModelFamilyID,
+        //             ModelID,
+        //             SKUID,
+        //             PartID
+        //         FROM Config_AuditList
+        //         WHERE
+        //             DocumentID = @DocumentID
+        //             AND PartID = @PartID
+        //             AND SKUID = @SKUID
+        //     `);
 
+        const auditRequest = new sql.Request()
+            .input("DocumentID", sql.Int, document.DocumentID)
+            .input("PartID", sql.NVarChar, partId);
+        
+        // build @sku0, @sku1, ... dynamically
+        const skuParams = planSKUIDs.map((id, i) => {
+            auditRequest.input(`sku${i}`, sql.Int, id);
+            return `@sku${i}`;
+        });
+        
+        const auditListResult = await auditRequest.query(`
+            SELECT
+                AuditListID,
+                ModelFamilyID,
+                ModelID,
+                SKUID,
+                PartID
+            FROM Config_AuditList
+            WHERE
+                DocumentID = @DocumentID
+                AND PartID = @PartID
+                AND SKUID IN (${skuParams.join(",")})
+        `);
 
         // ========================================================
         // 8. Create Execute IQC Audit List
@@ -2712,9 +2748,671 @@ const getSqlType = (value) => {
     return sql.NVarChar;
 }
 
+// const sampleCollection = async (
+//     batchId,
+//     partId,
+//     userId
+// ) => {
+
+//     // ==================================================
+//     // 1. Find Material Receiving record
+//     // ==================================================
+
+//     const fetchRequest = new sql.Request();
+
+//     fetchRequest.input(
+//         "BatchID",
+//         sql.NVarChar,
+//         batchId
+//     );
+
+//     fetchRequest.input(
+//         "PartID",
+//         sql.NVarChar,
+//         partId
+//     );
+
+//     const existing = await fetchRequest.query(`
+//         SELECT
+//             UID,
+//             EDINumber,
+//             BatchID,
+//             PartID
+//         FROM Material_Receiving
+//         WHERE
+//             BatchID = @BatchID
+//             AND PartID = @PartID
+//     `);
+
+//     if (existing.recordset.length === 0) {
+//         throw new Error("Material receiving record not found");
+//     }
+
+//     const materialReceiving = existing.recordset[0];
+
+//     const materialReceivingUID = materialReceiving.UID;
+//     const ediNumber = materialReceiving.EDINumber;
+
+
+//     // ==================================================
+//     // 2. Get User
+//     // ==================================================
+
+//     const userResult = await new sql.Request()
+//         .input(
+//             "UserName",
+//             sql.NVarChar,
+//             userId
+//         )
+//         .query(`
+//             SELECT UserID
+//             FROM Config_User
+//             WHERE UserName = @UserName
+//         `);
+
+//     if (userResult.recordset.length === 0) {
+//         throw new Error("User not found");
+//     }
+
+//     const validatedBy = userResult.recordset[0].UserID;
+
+
+//     // ==================================================
+//     // 3. Update Material Receiving
+//     // ==================================================
+
+//     const request = new sql.Request();
+
+//     request.input(
+//         "BatchID",
+//         sql.NVarChar,
+//         batchId
+//     );
+
+//     request.input(
+//         "PartID",
+//         sql.NVarChar,
+//         partId
+//     );
+
+//     request.input(
+//         "ValidatedBy",
+//         sql.NVarChar,
+//         validatedBy
+//     );
+
+//     const result = await request.query(`
+//         UPDATE Material_Receiving
+//         SET
+//             Status = 6,
+//             ValidatedBy = @ValidatedBy,
+//             SampleQty = 5,
+//             SampleLevel = 1,
+//             TimeStamp = GETDATE()
+//         WHERE
+//             BatchID = @BatchID
+//             AND PartID = @PartID
+//     `);
+
+
+//     // ==================================================
+//     // 4. Insert into Geneology
+//     // ==================================================
+
+//     const genealogyRequest = new sql.Request();
+
+//     genealogyRequest.input(
+//         "EDINumber",
+//         sql.NVarChar,
+//         ediNumber
+//     );
+
+//     genealogyRequest.input(
+//         "PartID",
+//         sql.NVarChar,
+//         partId
+//     );
+
+//     genealogyRequest.input(
+//         "Status",
+//         sql.Int,
+//         6
+//     );
+
+//     genealogyRequest.input(
+//         "LastUpdatedBy",
+//         sql.NVarChar,
+//         validatedBy
+//     );
+
+//     await genealogyRequest.query(`
+//         INSERT INTO Material_Receiving_Geneology
+//         (
+//             EDINumber,
+//             PartID,
+//             Status,
+//             LastUpdatedBy,
+//             LastUpdatedTime
+//         )
+//         VALUES
+//         (
+//             @EDINumber,
+//             @PartID,
+//             @Status,
+//             @LastUpdatedBy,
+//             GETDATE()
+//         )
+//     `);
+
+
+//     // ==================================================
+//     // 5. Get Execute IQC Audit Lists
+//     // ==================================================
+
+//     const executeAuditRequest = new sql.Request();
+
+//     executeAuditRequest.input(
+//         "BatchID",
+//         sql.NVarChar,
+//         batchId
+//     );
+
+//     executeAuditRequest.input(
+//         "PartID",
+//         sql.NVarChar,
+//         partId
+//     );
+
+//     const executeAuditResult =
+//     await executeAuditRequest.query(`
+//         SELECT
+//             E.UID,
+//             E.AuditListID,
+//             E.PartID,
+//             E.BatchID,
+//             E.AuditInstanceID,
+//             E.Status,
+//             A.DocumentID
+//         FROM QA_Execute_IQC_AuditList E
+//         INNER JOIN Config_AuditList A
+//             ON E.AuditListID = A.AuditListID
+//         WHERE
+//             E.PartID = @PartID
+//             AND E.BatchID = @BatchID
+//     `);
+
+//     // ==================================================
+//     // 5.1 Update QA Execute IQC Audit List
+//     // ==================================================
+    
+//     const updateAuditRequest = new sql.Request();
+    
+//     updateAuditRequest.input(
+//         "BatchID",
+//         sql.NVarChar,
+//         batchId
+//     );
+    
+//     updateAuditRequest.input(
+//         "PartID",
+//         sql.NVarChar,
+//         partId
+//     );
+    
+//     updateAuditRequest.input(
+//         "ExecutedBy",
+//         sql.NVarChar,
+//         validatedBy
+//     );
+    
+//     await updateAuditRequest.query(`
+//         UPDATE QA_Execute_IQC_AuditList
+//         SET
+//             ExecutedStartTime = GETDATE(),
+//             ExecutedBy = @ExecutedBy,
+//             Status = 2
+//         WHERE
+//             PartID = @PartID
+//             AND BatchID = @BatchID
+//     `);
+
+
+//     // ==================================================
+//     // 6. Process Each Audit List
+//     // ==================================================
+
+//     for (const executeAudit of executeAuditResult.recordset) {
+
+//         const documentID = executeAudit.DocumentID;
+//         const auditListID = executeAudit.AuditListID;
+//         const auditInstanceID = executeAudit.AuditInstanceID;
+//         // ----------------------------------------------
+//         // Get mapping
+//         // ----------------------------------------------
+
+//         const mapping = checkpointMapping[documentID];
+
+//         if (!mapping) {
+//             throw new Error(
+//                 `Checkpoint mapping not found for DocumentID ${documentID}`
+//             );
+//         }
+
+//         const configTable = mapping.configTable;
+//         const executeTable = mapping.executeTable;
+
+
+//         // ----------------------------------------------
+//         // Get checkpoints
+//         // ----------------------------------------------
+
+//         const checkpointRequest = new sql.Request();
+
+//         checkpointRequest.input(
+//             "AuditListID",
+//             sql.Int,
+//             auditListID
+//         );
+
+//         const checkpointResult =
+//             await checkpointRequest.query(`
+//                 SELECT *
+//                 FROM ${configTable}
+//                 WHERE AuditListID = @AuditListID
+//             `);
+
+//         // console.log(
+//         //     `AuditListID ${auditListID} checkpoints:`,
+//         //     checkpointResult.recordset
+//         // );
+//          const checkpoints = checkpointResult.recordset;
+
+//     if (checkpoints.length === 0) {
+//         continue;
+//     }
+//     // --------------------------------------------------
+//     // 2. Get columns of EXECUTE table
+//     // --------------------------------------------------
+    
+//     const columnResult = await new sql.Request()
+//         .input(
+//             "TableName",
+//             sql.NVarChar,
+//             executeTable
+//         )
+//         .query(`
+//             SELECT
+//                 c.COLUMN_NAME,
+//                 COLUMNPROPERTY(
+//                     OBJECT_ID(
+//                         c.TABLE_SCHEMA + '.' + c.TABLE_NAME
+//                     ),
+//                     c.COLUMN_NAME,
+//                     'IsIdentity'
+//                 ) AS IsIdentity
+//             FROM INFORMATION_SCHEMA.COLUMNS c
+//             WHERE
+//                 c.TABLE_NAME = @TableName
+//             ORDER BY
+//                 c.ORDINAL_POSITION
+//         `);
+    
+//     // --------------------------------------------------
+//     // 3. Find common columns - CASE INSENSITIVE
+//     // --------------------------------------------------
+    
+//     // Config table columns
+//     const configColumns = Object.keys(checkpoints[0]);
+    
+//     // Create lowercase lookup for execute table columns
+//     const executeColumnMap = {};
+    
+//     columnResult.recordset
+//         .filter(column => column.IsIdentity !== 1)
+//         .forEach(column => {
+    
+//             executeColumnMap[
+//                 column.COLUMN_NAME.toLowerCase()
+//             ] = column.COLUMN_NAME;
+    
+//         });
+
+
+//     // --------------------------------------------------
+//     // Find common columns
+//     // --------------------------------------------------
+
+//     const commonColumns = [];
+
+//     for (const configColumn of configColumns) {
+    
+//         const executeColumn =
+//             executeColumnMap[configColumn.toLowerCase()];
+    
+//         if (executeColumn) {
+    
+//             // Do NOT map Config AuditPointId
+//             // to Execute AuditPointID.
+//             //
+//             // Execute AuditPointID should receive
+//             // Config UID because of the FK.
+    
+//             if (
+//                 configColumn.toLowerCase() === "auditpointid" &&
+//                 executeColumn.toLowerCase() === "auditpointid"
+//             ) {
+//                 continue;
+//             }
+
+//             // AuditInstanceID must come from
+//             // QA_Execute_IQC_AuditList
+//             if (
+//                 configColumn.toLowerCase() === "auditinstanceid"
+//             ) {
+//                 continue;
+//             }
+    
+//             commonColumns.push({
+//                 configColumn: configColumn,
+//                 executeColumn: executeColumn
+//             });
+//         }
+//     }
+    
+    
+//     // ----------------------------------------------
+//     // Special FK mapping
+//     // Config UID → Execute AuditPointID
+//     // ----------------------------------------------
+    
+//     if (executeColumnMap["auditpointid"]) {
+    
+//         commonColumns.push({
+//             configColumn: "UID",
+//             executeColumn: executeColumnMap["auditpointid"]
+//         });
+    
+//     }
+    
+//     // --------------------------------------------------
+//     // Add SampleLevel and SampleNo
+//     // --------------------------------------------------
+    
+//     const sampleLevelColumn =
+//         executeColumnMap["samplelevel"];
+    
+//     const sampleNoColumn =
+//         executeColumnMap["sampleno"];
+
+//     const auditInstanceIDColumn =
+//     executeColumnMap["auditinstanceid"];
+    
+//     if (!sampleLevelColumn) {
+//         throw new Error(
+//             `SampleLevel column not found in execute table ${executeTable}`
+//         );
+//     }
+    
+//     if (!sampleNoColumn) {
+//         throw new Error(
+//             `SampleNo column not found in execute table ${executeTable}`
+//         );
+//     }
+    
+
+//     if (!auditInstanceIDColumn) {
+//         throw new Error(
+//             `AuditInstanceID column not found in execute table ${executeTable}`
+//         );
+//     }
+    
+//     // --------------------------------------------------
+//     // Remove columns that should NOT come from config
+//     // --------------------------------------------------
+    
+//     // These will be handled separately
+//     const specialColumns = [
+//         "samplelevel",
+//         "sampleno",
+//         "auditinstanceid"
+//     ];
+    
+//     const insertColumns = commonColumns.filter(
+//         column =>
+//             !specialColumns.includes(
+//                 column.executeColumn.toLowerCase()
+//             )
+//     );
+    
+    
+//     // --------------------------------------------------
+//     // Debug
+//     // --------------------------------------------------
+    
+//     console.log(
+//         `Common columns ${configTable} → ${executeTable}:`,
+//         insertColumns
+//             .map(column => ({
+//                 config: column.configColumn,
+//                 execute: column.executeColumn
+//             }))
+//     );
+    
+    
+//     // --------------------------------------------------
+//     // 4. Insert each checkpoint 5 times
+//     // --------------------------------------------------
+    
+//     for (const checkpoint of checkpoints) {
+    
+//         // ----------------------------------------------
+//         // Sample No 1 → 5
+//         // ----------------------------------------------
+    
+//         for (let sampleNo = 1; sampleNo <= 5; sampleNo++) {
+    
+//             const request = new sql.Request();
+    
+    
+//             // ------------------------------------------
+//             // Columns
+//             // ------------------------------------------
+    
+//             const columnNames = [];
+    
+//             const parameterNames = [];
+    
+//             let parameterIndex = 0;
+    
+    
+//             // ------------------------------------------
+//             // Common columns
+//             // ------------------------------------------
+    
+//             for (const column of insertColumns) {
+    
+//                 columnNames.push(
+//                     `[${column.executeColumn}]`
+//                 );
+    
+//                 parameterNames.push(
+//                     `@value${parameterIndex}`
+//                 );
+    
+    
+//                 let value;
+    
+    
+//                 // --------------------------------------
+//                 // Values from QA_Execute_IQC_AuditList
+//                 // --------------------------------------
+    
+//                 if (
+//                     column.configColumn.toLowerCase() ===
+//                         "auditlistid" ||
+//                     column.configColumn.toLowerCase() ===
+//                         "partid" ||
+//                     column.configColumn.toLowerCase() ===
+//                         "batchid"
+//                 ) {
+    
+//                     value = executeAudit[
+//                         column.configColumn
+//                     ];
+    
+//                 }
+    
+//                 // --------------------------------------
+//                 // Values from CONFIG checkpoint table
+//                 // --------------------------------------
+    
+//                 else {
+    
+//                     value = checkpoint[
+//                         column.configColumn
+//                     ];
+    
+//                 }
+    
+    
+//                 // --------------------------------------
+//                 // SQL Type
+//                 // --------------------------------------
+    
+//                 let sqlType;
+    
+//                 if (typeof value === "number") {
+    
+//                     sqlType = Number.isInteger(value)
+//                         ? sql.Int
+//                         : sql.Decimal(18, 4);
+    
+//                 }
+//                 else if (typeof value === "boolean") {
+    
+//                     sqlType = sql.Bit;
+    
+//                 }
+//                 else {
+    
+//                     sqlType = sql.NVarChar(sql.MAX);
+    
+//                 }
+    
+    
+//                 request.input(
+//                     `value${parameterIndex}`,
+//                     sqlType,
+//                     value
+//                 );
+    
+//                 parameterIndex++;
+//             }
+
+//             // ==================================================
+//             // AuditInstanceID
+//             // ==================================================
+
+//             columnNames.push(
+//                 `[${auditInstanceIDColumn}]`
+//             );
+
+//             parameterNames.push(
+//                 `@AuditInstanceID`
+//             );
+
+//             request.input(
+//                 "AuditInstanceID",
+//                 sql.Int,
+//                 auditInstanceID
+//             );
+    
+    
+//             // ------------------------------------------
+//             // SampleLevel
+//             // ------------------------------------------
+    
+//             columnNames.push(
+//                 `[${sampleLevelColumn}]`
+//             );
+    
+//             parameterNames.push(
+//                 `@SampleLevel`
+//             );
+    
+//             request.input(
+//                 "SampleLevel",
+//                 sql.Int,
+//                 1
+//             );
+    
+    
+//             // ------------------------------------------
+//             // SampleNo
+//             // ------------------------------------------
+    
+//             columnNames.push(
+//                 `[${sampleNoColumn}]`
+//             );
+    
+//             parameterNames.push(
+//                 `@SampleNo`
+//             );
+    
+//             request.input(
+//                 "SampleNo",
+//                 sql.Int,
+//                 sampleNo
+//             );
+    
+    
+//             // ------------------------------------------
+//             // INSERT
+//             // ------------------------------------------
+    
+//             const insertQuery = `
+//                 INSERT INTO ${executeTable}
+//                 (
+//                     ${columnNames.join(", ")}
+//                 )
+//                 VALUES
+//                 (
+//                     ${parameterNames.join(", ")}
+//                 )
+//             `;
+    
+    
+//             // console.log(
+//             //     `DocumentID: ${documentID}, ` +
+//             //     `AuditListID: ${auditListID}, ` +
+//             //     `AuditInstanceID: ${auditInstanceID}, ` +
+//             //     `Checkpoint: ${checkpoint.Aspect}, ` +
+//             //     `SampleNo: ${sampleNo}`
+//             // );
+    
+    
+//             await request.query(insertQuery);
+//         }
+//     }
+//     }
+
+
+//     // ==================================================
+//     // 5. Response
+//     // ==================================================
+
+//     return {
+//         rowsAffected: result.rowsAffected[0],
+//         batchId,
+//         partId,
+//         ediNumber
+//     };
+// }
+
 const sampleCollection = async (
     batchId,
     partId,
+    skuId,
     userId
 ) => {
 
@@ -2870,75 +3568,64 @@ const sampleCollection = async (
 
 
     // ==================================================
-    // 5. Get Execute IQC Audit Lists
+    // 5. Get Execute IQC Audit Lists (filtered by SKU)
+    //    Only Status = 1 (not yet collected) so a repeat
+    //    call cannot insert the checkpoints twice
     // ==================================================
 
-    const executeAuditRequest = new sql.Request();
+    const executeAuditResult = await new sql.Request()
+        .input("BatchID", sql.NVarChar, batchId)
+        .input("PartID", sql.NVarChar, partId)
+        .input("SKUID", sql.Int, skuId)
+        .query(`
+            SELECT
+                E.UID,
+                E.AuditListID,
+                E.PartID,
+                E.BatchID,
+                E.SKUID,
+                E.AuditInstanceID,
+                E.Status,
+                A.DocumentID
+            FROM QA_Execute_IQC_AuditList E
+            INNER JOIN Config_AuditList A
+                ON E.AuditListID = A.AuditListID
+            WHERE
+                E.PartID = @PartID
+                AND E.BatchID = @BatchID
+                AND E.SKUID = @SKUID
+                AND E.Status = 1
+        `);
+    
+    if (executeAuditResult.recordset.length === 0) {
+        throw new Error(
+            `No pending IQC audit found for Batch ${batchId}, ` +
+            `Part ${partId}, SKU ${skuId}`
+        );
+    }
 
-    executeAuditRequest.input(
-        "BatchID",
-        sql.NVarChar,
-        batchId
-    );
+// ==================================================
+// 5.1 Update only those rows
+// ==================================================
 
-    executeAuditRequest.input(
-        "PartID",
-        sql.NVarChar,
-        partId
-    );
+const auditUIDs = executeAuditResult.recordset.map(r => r.UID);
 
-    const executeAuditResult =
-    await executeAuditRequest.query(`
-        SELECT
-            E.UID,
-            E.AuditListID,
-            E.PartID,
-            E.BatchID,
-            E.AuditInstanceID,
-            E.Status,
-            A.DocumentID
-        FROM QA_Execute_IQC_AuditList E
-        INNER JOIN Config_AuditList A
-            ON E.AuditListID = A.AuditListID
-        WHERE
-            E.PartID = @PartID
-            AND E.BatchID = @BatchID
-    `);
+const updateAuditRequest = new sql.Request()
+    .input("ExecutedBy", sql.NVarChar, validatedBy);
 
-    // ==================================================
-    // 5.1 Update QA Execute IQC Audit List
-    // ==================================================
-    
-    const updateAuditRequest = new sql.Request();
-    
-    updateAuditRequest.input(
-        "BatchID",
-        sql.NVarChar,
-        batchId
-    );
-    
-    updateAuditRequest.input(
-        "PartID",
-        sql.NVarChar,
-        partId
-    );
-    
-    updateAuditRequest.input(
-        "ExecutedBy",
-        sql.NVarChar,
-        validatedBy
-    );
-    
-    await updateAuditRequest.query(`
-        UPDATE QA_Execute_IQC_AuditList
-        SET
-            ExecutedStartTime = GETDATE(),
-            ExecutedBy = @ExecutedBy,
-            Status = 2
-        WHERE
-            PartID = @PartID
-            AND BatchID = @BatchID
-    `);
+const uidParams = auditUIDs.map((uid, i) => {
+    updateAuditRequest.input(`uid${i}`, sql.Int, uid);
+    return `@uid${i}`;
+});
+
+await updateAuditRequest.query(`
+    UPDATE QA_Execute_IQC_AuditList
+    SET
+        ExecutedStartTime = GETDATE(),
+        ExecutedBy = @ExecutedBy,
+        Status = 2
+    WHERE UID IN (${uidParams.join(",")})
+`);
 
 
     // ==================================================
