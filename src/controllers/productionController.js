@@ -759,6 +759,35 @@ const createMaterialRequest = async (req, res) => {
     }
 };
 
+const getProductionDateAndShift = async (req, res) => {
+
+    try {
+
+        const lineId = Number(req.query.lineId);
+
+        if (!Number.isInteger(lineId) || lineId <= 0) {
+            return errorResponse(res, "A valid LineID is required", 400);
+        }
+
+        const data =
+            await productionService.getProductionDateAndShift(lineId);
+
+        return successResponse(
+            res,
+            data,
+            "Production Date and Shift Fetched Successfully"
+        );
+
+    } catch (error) {
+
+        return errorResponse(
+            res,
+            error.message
+        );
+
+    }
+};
+
 const getProductionCallLogs = async (req, res) => {
 
     try {
@@ -1113,6 +1142,7 @@ module.exports = {
     engineTakeIn,
     getNonMesControlledMaterials,
     createMaterialRequest,
+    getProductionDateAndShift,
     getProductionCallLogs,
     getUnassignedDowntime,
     updateDowntime,

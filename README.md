@@ -1,5 +1,15 @@
 # Maintenance
 
+## Production date and shift
+
+Fetch the configured production date and shift for a line:
+
+```http
+GET /api/productionSupervisor/production-date-shift?lineId=1
+```
+
+The response data contains `ProdDate` and `ProdShift`.
+
 ## Unassigned production downtime
 
 Fetch downtime records where both `LossID` and `SubLossID` are NULL or blank:

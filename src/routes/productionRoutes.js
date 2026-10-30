@@ -101,6 +101,11 @@ router.post(
 );
 
 router.get(
+    "/production-date-shift",
+    productionController.getProductionDateAndShift
+);
+
+router.get(
     "/call-logs",
     productionController.getProductionCallLogs
 );

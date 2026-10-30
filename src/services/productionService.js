@@ -181,6 +181,12 @@ const createMaterialRequest = async (
 
 };
 
+const getProductionDateAndShift = async (lineId) => {
+
+    return await productionRepository.getProductionDateAndShift(lineId);
+
+};
+
 const getProductionCallLogs = async () => {
 
     return await productionRepository.getProductionCallLogs();
@@ -300,6 +306,7 @@ module.exports = {
     engineTakeIn,
     getNonMesControlledMaterials,
     createMaterialRequest,
+    getProductionDateAndShift,
     getProductionCallLogs,
     getUnassignedDowntime,
     updateDowntime,

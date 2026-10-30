@@ -2057,6 +2057,29 @@ const createMaterialRequest = async (
     return result.recordset;
 };
 
+const getProductionDateAndShift = async (lineId) => {
+
+    const request = new sql.Request();
+    request.input("LineID", sql.Int, lineId);
+
+    const result = await request.query(`
+        SELECT
+            MAX(CASE WHEN ParameterName = 'ProdDate' THEN ParameterValue END) AS ProdDate,
+            MAX(CASE WHEN ParameterName = 'ProdShift' THEN ParameterValue END) AS ProdShift
+        FROM dbo.ApplicationSetting
+        WHERE LineID = @LineID
+          AND ParameterName IN ('ProdDate', 'ProdShift')
+    `);
+
+    const settings = result.recordset[0];
+
+    if (!settings?.ProdDate || !settings?.ProdShift) {
+        throw new Error(`ProdDate or ProdShift setting not found for LineID ${lineId}`);
+    }
+
+    return settings;
+};
+
 const getProductionCallLogs = async () => {
 
     const result = await new sql.Request().query(`
@@ -2683,6 +2706,7 @@ module.exports = {
     engineTakeIn,
     getNonMesControlledMaterials,
     createMaterialRequest,
+    getProductionDateAndShift,
     getProductionCallLogs,
     getUnassignedDowntime,
     updateDowntime,
