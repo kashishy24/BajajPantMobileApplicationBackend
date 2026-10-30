@@ -440,13 +440,13 @@ const getMaterialAlertList = async () => {
             MRP.ToBeIssuedQty as RequiredQty,
             CB.MaterialMoveType
         FROM Material_Running_Plan MRP
-        Left JOIN Config_PartVariant CP
+        INNER JOIN Config_PartVariant CP
             ON MRP.PartID = CP.PartID
         
-        Left JOIN Prod_Plan PP
+        INNER JOIN Prod_Plan PP
             ON MRP.PlanID = PP.PlanID
 
-        Left JOIN Config_BOM CB
+        INNER JOIN Config_BOM CB
             ON PP.SKUID = CB.SKUID
             AND MRP.PartID = CB.PartID
 

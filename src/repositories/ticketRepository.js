@@ -155,30 +155,33 @@ const createTicket = async (data) => {
 const getOpenMaterialTickets = async () => {
 
     const result = await new sql.Request().query(`
-        SELECT
-            TM.TicketID,
-            TM.TimeStamp,
-            TM.LineID,
-            L.LineName,
-            TM.StationID,
-            S.StationName,
-            TM.RaiseBy,
-            TM.Reason,
-            TM.Remark,
-            TM.ExpectedClosure,
-            TM.TicketStatus
+       SELECT
+            TM.TicketID, TM.TimeStamp, TM.TrackingSeqNo,
+            TM.LineID, L.LineName,
+            TM.StationID, S.StationName,
+            TM.RaiseBy, TM.ActionBy,
+            TM.Reason, TM.Remark, TM.ExpectedClosure, TM.TicketStatus,
+            CASE WHEN TM.RaiseBy = 'Material' THEN 'My' ELSE 'Other' END AS TicketType
         FROM TicketManagement TM
-        INNER JOIN Config_Line L
-            ON TM.LineID = L.LineID
-        INNER JOIN Config_Station S
-            ON TM.StationID = S.StationID
-        WHERE TM.TicketStatus = 1 AND
-        TM.TrackingSeqNo = 1 AND (
-                TM.RaiseBy = 'Material'                                   -- My Tickets
-             OR (TM.RaiseBy <> 'Material' AND TM.ActionBy = 'Material')   -- Other Tickets
-    )
-        ORDER BY
-            TM.TimeStamp DESC
+        INNER JOIN TicketManagement T1                -- the first tracking row of the ticket
+                ON T1.TicketID = TM.TicketID
+               AND T1.TrackingSeqNo = 1
+        LEFT JOIN Config_Line L    ON TM.LineID = L.LineID
+        LEFT JOIN Config_Station S ON TM.StationID = S.StationID
+        WHERE TM.TicketStatus = 1
+          AND (TM.RaiseBy = 'Material' OR TM.ActionBy = 'Material')
+          AND (
+                TM.TrackingSeqNo = 1
+                OR EXISTS (                           -- show other rows only if something changed
+                    SELECT 1
+                    FROM TicketManagement T2
+                    WHERE T2.TicketID = TM.TicketID
+                      AND T2.TrackingSeqNo > 1
+                      AND (   ISNULL(T2.RaiseBy,  '') <> ISNULL(T1.RaiseBy,  '')
+                           OR ISNULL(T2.ActionBy, '') <> ISNULL(T1.ActionBy, ''))
+                )
+              )
+        ORDER BY TM.TimeStamp DESC, TM.TicketID, TM.TrackingSeqNo;
     `);
 
     return result.recordset;
@@ -188,30 +191,32 @@ const getOpenQualityTickets = async () => {
  
     const result = await new sql.Request().query(`
         SELECT
-            TM.TicketID,
-            TM.TimeStamp,
-            TM.LineID,
-            L.LineName,
-            TM.StationID,
-            S.StationName,
-            TM.RaiseBy,
-            TM.ActionBy,
-            TM.Reason,
-            TM.Remark,
-            TM.ExpectedClosure,
-            TM.TicketStatus
+            TM.TicketID, TM.TimeStamp, TM.TrackingSeqNo,
+            TM.LineID, L.LineName,
+            TM.StationID, S.StationName,
+            TM.RaiseBy, TM.ActionBy,
+            TM.Reason, TM.Remark, TM.ExpectedClosure, TM.TicketStatus,
+            CASE WHEN TM.RaiseBy = 'Quality' THEN 'My' ELSE 'Other' END AS TicketType
         FROM TicketManagement TM
-        INNER JOIN Config_Line L
-            ON TM.LineID = L.LineID
-        INNER JOIN Config_Station S
-            ON TM.StationID = S.StationID
-        WHERE TM.TicketStatus = 1 AND
-        TM.TrackingSeqNo = 1 AND (
-                TM.RaiseBy = 'Quality'                                   -- My Tickets
-             OR (TM.RaiseBy <> 'Quality' AND TM.ActionBy = 'Quality')   -- Other Tickets
-    )
-        ORDER BY
-            TM.TimeStamp DESC
+        INNER JOIN TicketManagement T1                -- the first tracking row of the ticket
+                ON T1.TicketID = TM.TicketID
+               AND T1.TrackingSeqNo = 1
+        LEFT JOIN Config_Line L    ON TM.LineID = L.LineID
+        LEFT JOIN Config_Station S ON TM.StationID = S.StationID
+        WHERE TM.TicketStatus = 1
+          AND (TM.RaiseBy = 'Quality' OR TM.ActionBy = 'Quality')
+          AND (
+                TM.TrackingSeqNo = 1
+                OR EXISTS (                           -- show other rows only if something changed
+                    SELECT 1
+                    FROM TicketManagement T2
+                    WHERE T2.TicketID = TM.TicketID
+                      AND T2.TrackingSeqNo > 1
+                      AND (   ISNULL(T2.RaiseBy,  '') <> ISNULL(T1.RaiseBy,  '')
+                           OR ISNULL(T2.ActionBy, '') <> ISNULL(T1.ActionBy, ''))
+                )
+              )
+        ORDER BY TM.TimeStamp DESC, TM.TicketID, TM.TrackingSeqNo;
     `);
  
     return result.recordset;
@@ -221,28 +226,32 @@ const getOpenMaintenanceTickets = async () => {
 
     const result = await new sql.Request().query(`
         SELECT
-            TM.TicketID,
-            TM.TimeStamp,
-            TM.LineID,
-            L.LineName,
-            TM.StationID,
-            S.StationName,
-            TM.RaiseBy,
-            TM.Reason,
-            TM.Remark,
-            TM.ExpectedClosure,
-            TM.TicketStatus
+            TM.TicketID, TM.TimeStamp, TM.TrackingSeqNo,
+            TM.LineID, L.LineName,
+            TM.StationID, S.StationName,
+            TM.RaiseBy, TM.ActionBy,
+            TM.Reason, TM.Remark, TM.ExpectedClosure, TM.TicketStatus,
+            CASE WHEN TM.RaiseBy = 'Maintenance' THEN 'My' ELSE 'Other' END AS TicketType
         FROM TicketManagement TM
-        INNER JOIN Config_Line L
-            ON TM.LineID = L.LineID
-        INNER JOIN Config_Station S
-            ON TM.StationID = S.StationID
-        WHERE TM.TicketStatus = 1 AND TM.TrackingSeqNo = 1 AND (
-                TM.RaiseBy = 'Maintenance'                                   -- My Tickets
-             OR (TM.RaiseBy <> 'Maintenance' AND TM.ActionBy = 'Maintenance')   -- Other Tickets
-    )
-        ORDER BY
-            TM.TimeStamp DESC
+        INNER JOIN TicketManagement T1                -- the first tracking row of the ticket
+                ON T1.TicketID = TM.TicketID
+               AND T1.TrackingSeqNo = 1
+        LEFT JOIN Config_Line L    ON TM.LineID = L.LineID
+        LEFT JOIN Config_Station S ON TM.StationID = S.StationID
+        WHERE TM.TicketStatus = 1
+          AND (TM.RaiseBy = 'Maintenance' OR TM.ActionBy = 'Maintenance')
+          AND (
+                TM.TrackingSeqNo = 1
+                OR EXISTS (                           -- show other rows only if something changed
+                    SELECT 1
+                    FROM TicketManagement T2
+                    WHERE T2.TicketID = TM.TicketID
+                      AND T2.TrackingSeqNo > 1
+                      AND (   ISNULL(T2.RaiseBy,  '') <> ISNULL(T1.RaiseBy,  '')
+                           OR ISNULL(T2.ActionBy, '') <> ISNULL(T1.ActionBy, ''))
+                )
+              )
+        ORDER BY TM.TimeStamp DESC, TM.TicketID, TM.TrackingSeqNo;
     `);
 
     return result.recordset;

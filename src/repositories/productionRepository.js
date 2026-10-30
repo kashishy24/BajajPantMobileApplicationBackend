@@ -353,30 +353,33 @@ const createTicketNotifySubmit = async ({
 const getOpenProductionTickets = async () => {
  
     const result = await new sql.Request().query(`
-        SELECT
-            TM.TicketID,
-            TM.TimeStamp,
-            TM.LineID,
-            L.LineName,
-            TM.StationID,
-            S.StationName,
-            TM.RaiseBy,
-            TM.ActionBy,
-            TM.Reason,
-            TM.Remark,
-            TM.ExpectedClosure,
-            TM.TicketStatus
-                FROM TicketManagement TM
-                    INNER JOIN Config_Line L
-                        ON TM.LineID = L.LineID
-                    INNER JOIN Config_Station S
-                        ON TM.StationID = S.StationID
-                    WHERE TM.TicketStatus = 1 AND TM.TrackingSeqNo = 1 AND (
-                            TM.RaiseBy = 'Production'                                   -- My Tickets
-                         OR (TM.RaiseBy <> 'Production' AND TM.ActionBy = 'Production')   -- Other Tickets
+       SELECT
+            TM.TicketID, TM.TimeStamp, TM.TrackingSeqNo,
+            TM.LineID, L.LineName,
+            TM.StationID, S.StationName,
+            TM.RaiseBy, TM.ActionBy,
+            TM.Reason, TM.Remark, TM.ExpectedClosure, TM.TicketStatus,
+            CASE WHEN TM.RaiseBy = 'Production' THEN 'My' ELSE 'Other' END AS TicketType
+        FROM TicketManagement TM
+        INNER JOIN TicketManagement T1                -- the first tracking row of the ticket
+                ON T1.TicketID = TM.TicketID
+               AND T1.TrackingSeqNo = 1
+        LEFT JOIN Config_Line L    ON TM.LineID = L.LineID
+        LEFT JOIN Config_Station S ON TM.StationID = S.StationID
+        WHERE TM.TicketStatus = 1
+          AND (TM.RaiseBy = 'Production' OR TM.ActionBy = 'Production')
+          AND (
+                TM.TrackingSeqNo = 1
+                OR EXISTS (                           -- show other rows only if something changed
+                    SELECT 1
+                    FROM TicketManagement T2
+                    WHERE T2.TicketID = TM.TicketID
+                      AND T2.TrackingSeqNo > 1
+                      AND (   ISNULL(T2.RaiseBy,  '') <> ISNULL(T1.RaiseBy,  '')
+                           OR ISNULL(T2.ActionBy, '') <> ISNULL(T1.ActionBy, ''))
                 )
-                    ORDER BY
-                        TM.TimeStamp DESC
+              )
+        ORDER BY TM.TimeStamp DESC, TM.TicketID, TM.TrackingSeqNo;
     `);
  
     return result.recordset;

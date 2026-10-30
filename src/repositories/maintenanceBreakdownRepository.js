@@ -535,7 +535,12 @@ const getOpenBreakdowns = async (stationId) => {
         LEFT JOIN dbo.Config_SubLossCategory SL ON SL.SubLossID = BD.SubLossID
         WHERE BD.BDStatus IN (1, 2, 3, 4)
           AND (@StationID IS NULL OR BD.StationID = @StationID)
-        ORDER BY BD.BDStartTime DESC;
+        ORDER BY
+        CASE
+            WHEN BD.BDStatus IN (2, 4) THEN 0
+            ELSE 1
+        END,
+        BD.BDStartTime DESC;
     `);
 
     return result.recordset;
