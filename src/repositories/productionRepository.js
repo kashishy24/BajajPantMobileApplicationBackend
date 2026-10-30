@@ -366,15 +366,17 @@ const getOpenProductionTickets = async () => {
             TM.Remark,
             TM.ExpectedClosure,
             TM.TicketStatus
-        FROM TicketManagement TM
-        INNER JOIN Config_Line L
-            ON TM.LineID = L.LineID
-        INNER JOIN Config_Station S
-            ON TM.StationID = S.StationID
-        WHERE TM.ActionBy = 'Production'
-          AND TM.TicketStatus = 1
-        ORDER BY
-            TM.TimeStamp DESC
+                FROM TicketManagement TM
+                    INNER JOIN Config_Line L
+                        ON TM.LineID = L.LineID
+                    INNER JOIN Config_Station S
+                        ON TM.StationID = S.StationID
+                    WHERE TM.TicketStatus = 1 AND TM.TrackingSeqNo = 1 AND (
+                            TM.RaiseBy = 'Production'                                   -- My Tickets
+                         OR (TM.RaiseBy <> 'Production' AND TM.ActionBy = 'Production')   -- Other Tickets
+                )
+                    ORDER BY
+                        TM.TimeStamp DESC
     `);
  
     return result.recordset;
