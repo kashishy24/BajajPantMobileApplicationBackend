@@ -170,6 +170,21 @@ const getOpenMaterialTickets = async () => {
         LEFT JOIN Config_Station S ON TM.StationID = S.StationID
         WHERE TM.TicketStatus = 1
           AND (TM.RaiseBy = 'Material' OR TM.ActionBy = 'Material')
+          /* NEW: ticket is currently with Material, or Material created it */
+          AND (
+                T1.RaiseBy = 'Material'
+                OR EXISTS (
+                    SELECT 1
+                    FROM TicketManagement LT
+                    WHERE LT.TicketID = TM.TicketID
+                      AND LT.TrackingSeqNo = (
+                            SELECT MAX(M.TrackingSeqNo)
+                            FROM TicketManagement M
+                            WHERE M.TicketID = TM.TicketID
+                      )
+                      AND LT.ActionBy = 'Material'
+                )
+              )
           AND (
                 TM.TrackingSeqNo = 1
                 OR EXISTS (                           -- show other rows only if something changed

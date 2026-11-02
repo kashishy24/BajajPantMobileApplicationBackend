@@ -397,7 +397,9 @@ const getTicketDetails = async (ticketId) => {
             TM.TicketID,
             TM.TimeStamp,
             TM.LineID,
+            L.LineName,
             TM.StationID,
+            S.StationName,
             TM.ActivityID,
             TM.PartID,
             TM.EquipmentID,
@@ -423,8 +425,10 @@ const getTicketDetails = async (ticketId) => {
                 ORDER BY L.TrackingSeqNo DESC
             ) AS LastActionBy
         FROM TicketManagement TM
-        Left JOIN Config_User U ON TM.UpdatedBy = U.UserID
-        Left JOIN Config_Department D ON U.DepartmentID = D.DepartmentID
+        inner JOIN Config_User U ON TM.UpdatedBy = U.UserID
+        inner JOIN Config_Department D ON U.DepartmentID = D.DepartmentID
+        inner Join Config_Line L ON TM.LineID = L.LineID
+        inner Join Config_Station S ON TM.StationID = S.StationID
         WHERE TM.TicketID = @TicketID
     `);
  
@@ -455,6 +459,11 @@ const openTicketNotify = async ({
             DECLARE @DepartmentID INT;
             DECLARE @DepartmentName NVARCHAR(100);
             DECLARE @TrackingSeqNo INT;
+
+            DECLARE @LineID INT;
+            DECLARE @StationID INT;
+            DECLARE @Reason NVARCHAR(100);
+            DECLARE @NotificationID INT;
 
             /* =====================================================
                1. Check Ticket Exists
@@ -526,6 +535,15 @@ const openTicketNotify = async ({
             FROM TicketManagement WITH (UPDLOCK, HOLDLOCK)
             WHERE TicketID = @TicketID;
 
+            /* 5b. Read last tracking row (before inserting the new one) */
+            SELECT TOP 1
+                @LineID        = LineID,
+                @StationID     = StationID,
+                @Reason        = Reason
+            FROM TicketManagement
+            WHERE TicketID = @TicketID
+            ORDER BY TrackingSeqNo DESC;
+
 
             /* =====================================================
                6. Insert New Ticket Tracking Entry
@@ -548,7 +566,8 @@ const openTicketNotify = async ({
                 Remark,
                 TrackingSeqNo,
                 ExpectedClosure,
-                TicketStatus
+                TicketStatus,
+                UpdatedBy
             )
             SELECT TOP 1
                 TicketID,
@@ -566,10 +585,37 @@ const openTicketNotify = async ({
                 @Remark,
                 @TrackingSeqNo,
                 ExpectedClosure,
-                1
+                1,
+                @UserID
             FROM TicketManagement
             WHERE TicketID = @TicketID
             ORDER BY UID DESC;
+
+            /* 6b. Insert NotificationManagement */
+            INSERT INTO NotificationManagement
+            (
+                NotificationDesc,
+                TimeStamp,
+                RaiseBy,
+                Category,
+                LineID,
+                StationID,
+                Role,
+                Status
+            )
+            VALUES
+            (
+                @Reason,
+                GETDATE(),
+                @UserID,
+                @ActionBy,
+                @LineID,
+                @StationID,
+                'Supervisor',      
+                1
+            );
+            
+            SET @NotificationID = SCOPE_IDENTITY();
 
 
             /* =====================================================
@@ -599,6 +645,20 @@ const openTicketNotify = async ({
               AND TrackingSeqNo = @TrackingSeqNo
             ORDER BY UID DESC;
 
+            /* 7b. Return the created notification */
+            SELECT
+                NotificationID,
+                NotificationDesc,
+                TimeStamp,
+                RaiseBy,
+                Category,
+                LineID,
+                StationID,
+                Role,
+                Status
+            FROM NotificationManagement
+            WHERE NotificationID = @NotificationID;
+
 
             COMMIT TRANSACTION;
 
@@ -615,7 +675,8 @@ const openTicketNotify = async ({
     `);
 
     return {
-        ticket: result.recordset[0]
+        ticket: result.recordset[0],
+        notification: result.recordsets[1][0]
     };
 };
 
@@ -2544,6 +2605,13 @@ const updateTicket = async ({
             DECLARE @NewTrackingSeqNo INT;
             DECLARE @ReasonName NVARCHAR(100);
 
+            DECLARE @LastActionBy NVARCHAR(50);
+            DECLARE @LastUpdatedBy NVARCHAR(50);
+            DECLARE @FinalActionBy NVARCHAR(50);
+            DECLARE @IsSameUser BIT = 0;
+
+            DECLARE @NotificationID INT;
+
             /* 1. Get Reason Name */
             SELECT TOP 1
                 @ReasonName = ReasonName
@@ -2555,16 +2623,29 @@ const updateTicket = async ({
                 THROW 50003, 'Reason not found for ReasonID', 1;
             END;
 
-            /* 4. Next TrackingSeqNo for this existing TicketID */
-            SELECT
-                @NewTrackingSeqNo = MAX(TrackingSeqNo) + 1
+           /* 4. Next TrackingSeqNo + last row's ActionBy / UpdatedBy */
+            SELECT TOP 1
+                @NewTrackingSeqNo = TrackingSeqNo + 1,
+                @LastActionBy     = ActionBy,
+                @LastUpdatedBy    = UpdatedBy
             FROM TicketManagement WITH (UPDLOCK, HOLDLOCK)
-            WHERE TicketID = @TicketID;
-
+            WHERE TicketID = @TicketID
+            ORDER BY TrackingSeqNo DESC;
+            
             IF @NewTrackingSeqNo IS NULL
             BEGIN
                 THROW 50004, 'Ticket not found for TicketID', 1;
             END;
+            
+            /* Same user as last entry? */
+            IF @LastUpdatedBy = @UserID
+                SET @IsSameUser = 1;
+            
+            SET @FinalActionBy =
+                CASE
+                    WHEN @IsSameUser = 1 THEN ISNULL(@LastActionBy, @ActionBy)
+                    ELSE @ActionBy
+                END;
 
             /* 5. Insert new TicketManagement row (same TicketID) */
             INSERT INTO TicketManagement
@@ -2600,7 +2681,7 @@ const updateTicket = async ({
                 @EngineNo,
                 @RaiseBy, 
                 @ReasonName,
-                @ActionBy,
+                @FinalActionBy,
                 @Remark,
                 @NewTrackingSeqNo,
                 @ExpectedClosure,
@@ -2625,12 +2706,14 @@ const updateTicket = async ({
                 @ReasonName,
                 GETDATE(),
                 @UserID,
-                @ActionBy,
+                CASE WHEN @IsSameUser = 1 THEN @FinalActionBy ELSE @RaiseBy END,
                 @LineID,
                 @StationID,
                 @Role,
                 1
             );
+
+            SET @NotificationID = SCOPE_IDENTITY();
 
             /* 7. Return the new ticket row */
             SELECT
@@ -2657,7 +2740,7 @@ const updateTicket = async ({
               AND TrackingSeqNo = @NewTrackingSeqNo;
 
             /* 8. Return the created notification */
-            SELECT TOP 1
+            SELECT
                 NotificationID,
                 NotificationDesc,
                 TimeStamp,
@@ -2668,11 +2751,7 @@ const updateTicket = async ({
                 Role,
                 Status
             FROM NotificationManagement
-            WHERE RaiseBy = @UserID
-              AND LineID = @LineID
-              AND StationID = @StationID
-              AND NotificationDesc = @ReasonName
-            ORDER BY NotificationID DESC;
+            WHERE NotificationID = @NotificationID;
 
             /* 9. Additional info */
             SELECT
@@ -2680,7 +2759,9 @@ const updateTicket = async ({
                 @NewTrackingSeqNo AS TrackingSeqNo,
                 @RaiseBy AS RaiseBy,
                 @ReasonID AS ReasonID,
-                @ReasonName AS ReasonName;
+                @ReasonName AS ReasonName,
+                @FinalActionBy AS ActionBy,
+                @IsSameUser AS IsSameUser
 
             COMMIT TRANSACTION;
 

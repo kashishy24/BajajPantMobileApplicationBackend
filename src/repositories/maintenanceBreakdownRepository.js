@@ -554,11 +554,14 @@ const getBreakdownById = async (breakdownId) => {
         SELECT
             BD.*,
             S.StationName,
+            LN.LineName,
             E.EquipmentName,
             L.LossName,
             SL.SubLossName
         FROM dbo.Maint_BreakDown_Log BD
         LEFT JOIN dbo.Config_Station S ON S.StationID = BD.StationID
+        LEFT JOIN dbo.Config_SubAssemblyLine SAL ON SAL.SubAsslyLineID = S.SubAsslyLineID
+        LEFT JOIN dbo.Config_Line LN             ON LN.LineID = SAL.LineID
         LEFT JOIN dbo.Config_Equipment E ON E.EquipmentID = BD.EquipmentID
         LEFT JOIN dbo.Config_LossCategory L ON L.LossID = BD.LossID
         LEFT JOIN dbo.Config_SubLossCategory SL ON SL.SubLossID = BD.SubLossID
