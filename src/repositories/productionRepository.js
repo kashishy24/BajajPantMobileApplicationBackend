@@ -413,7 +413,15 @@ const getTicketDetails = async (ticketId) => {
             TM.UpdatedBy AS RemarkedBy,
             U.UserName As updateByName,
             U.DepartmentID As UpdateByDepartment,
-            D.DepartmentName As UpdateByDepartmentName
+            D.DepartmentName As UpdateByDepartmentName,
+
+            /* NEW: ActionBy of the latest tracking row for this ticket */
+            (
+                SELECT TOP 1 L.ActionBy
+                FROM TicketManagement L
+                WHERE L.TicketID = TM.TicketID
+                ORDER BY L.TrackingSeqNo DESC
+            ) AS LastActionBy
         FROM TicketManagement TM
         Left JOIN Config_User U ON TM.UpdatedBy = U.UserID
         Left JOIN Config_Department D ON U.DepartmentID = D.DepartmentID
@@ -730,7 +738,8 @@ const closeTicket = async ({
                 Remark,
                 TrackingSeqNo,
                 ExpectedClosure,
-                TicketStatus
+                TicketStatus,
+                UpdatedBy
             )
             SELECT TOP 1
                 TicketID,
@@ -748,7 +757,8 @@ const closeTicket = async ({
                 @Remark,
                 @TrackingSeqNo,
                 ExpectedClosure,
-                2
+                2,
+                @UserID
             FROM TicketManagement
             WHERE TicketID = @TicketID
             ORDER BY UID DESC;
@@ -2110,44 +2120,44 @@ const getProductionCallLogs = async () => {
 const getUnassignedDowntime = async () => {
 
     const result = await new sql.Request().query(`
-       SELECT
-    d.DowntimeID,
-    d.[TimeStamp],
-    d.SubAsslyLineID,
-    d.StationID,
-    st.StationName,
-    d.ProdDate,
-    d.ProdShift,
-    d.StartTime,
-    d.EndTime,
-    d.CurrentDT,
-    d.TotalDT,
-    d.LossID,
-    l.LossName,
-    d.SubLossID,
-    sl.SubLossName,
-    d.[4MLossID],
-    d.UserID,
-    d.Reason,
-    d.LastUpdatedTime
-FROM dbo.Perf_Downtime d
-LEFT JOIN dbo.Config_Station st
-    ON d.StationID = st.StationID
-LEFT JOIN dbo.Config_LossCategory l
-    ON d.LossID = l.LossID
-LEFT JOIN dbo.Config_SubLossCategory sl
-    ON d.SubLossID = sl.SubLossID
-WHERE
-    (
-        d.LossID IS NULL
-        OR LTRIM(RTRIM(CONVERT(NVARCHAR(50), d.LossID))) = ''
-    )
-    AND (
-        d.SubLossID IS NULL
-        OR LTRIM(RTRIM(CONVERT(NVARCHAR(50), d.SubLossID))) = ''
-    )
-ORDER BY d.DowntimeID DESC
-    `);
+               SELECT
+            d.DowntimeID,
+            d.[TimeStamp],
+            d.SubAsslyLineID,
+            d.StationID,
+            st.StationName,
+            d.ProdDate,
+            d.ProdShift,
+            d.StartTime,
+            d.EndTime,
+            d.CurrentDT,
+            d.TotalDT,
+            d.LossID,
+            l.LossName,
+            d.SubLossID,
+            sl.SubLossName,
+            d.[4MLossID],
+            d.UserID,
+            d.Reason,
+            d.LastUpdatedTime
+        FROM dbo.Perf_Downtime d
+        LEFT JOIN dbo.Config_Station st
+            ON d.StationID = st.StationID
+        LEFT JOIN dbo.Config_LossCategory l
+            ON d.LossID = l.LossID
+        LEFT JOIN dbo.Config_SubLossCategory sl
+            ON d.SubLossID = sl.SubLossID
+        WHERE
+            (
+                d.LossID IS NULL
+                OR LTRIM(RTRIM(CONVERT(NVARCHAR(50), d.LossID))) = ''
+            )
+            AND (
+                d.SubLossID IS NULL
+                OR LTRIM(RTRIM(CONVERT(NVARCHAR(50), d.SubLossID))) = ''
+            )
+        ORDER BY d.DowntimeID DESC
+            `);
 
     return result.recordset;
 };
@@ -2159,46 +2169,46 @@ const updateDowntime = async ({
     reason,
     lastUpdatedTime,
     userId
-}) => {
-
-    const request = new sql.Request();
-
-    request.input("DowntimeID", sql.Int, downtimeId);
-    request.input("LossID", sql.Int, lossId);
-    request.input("SubLossID", sql.Int, subLossId);
-    request.input("Reason", sql.NVarChar(sql.MAX), reason);
-    request.input("LastUpdatedTime", sql.DateTime, lastUpdatedTime);
-    request.input("UserID", sql.Int, userId);
-
-    const result = await request.query(`
-        UPDATE dbo.Perf_Downtime
-        SET
-            LossID = @LossID,
-            SubLossID = @SubLossID,
-            Reason = @Reason,
-            LastUpdatedTime = @LastUpdatedTime,
-            UserID = @UserID
-        OUTPUT
-            INSERTED.DowntimeID,
-            INSERTED.[TimeStamp],
-            INSERTED.SubAsslyLineID,
-            INSERTED.StationID,
-            INSERTED.ProdDate,
-            INSERTED.ProdShift,
-            INSERTED.StartTime,
-            INSERTED.EndTime,
-            INSERTED.CurrentDT,
-            INSERTED.TotalDT,
-            INSERTED.LossID,
-            INSERTED.SubLossID,
-            INSERTED.[4MLossID],
-            INSERTED.UserID,
-            INSERTED.Reason,
-            INSERTED.LastUpdatedTime
-        WHERE DowntimeID = @DowntimeID
-    `);
-
-    return result.recordset[0] || null;
+    }) => {
+    
+        const request = new sql.Request();
+    
+        request.input("DowntimeID", sql.Int, downtimeId);
+        request.input("LossID", sql.Int, lossId);
+        request.input("SubLossID", sql.Int, subLossId);
+        request.input("Reason", sql.NVarChar(sql.MAX), reason);
+        request.input("LastUpdatedTime", sql.DateTime, lastUpdatedTime);
+        request.input("UserID", sql.Int, userId);
+    
+        const result = await request.query(`
+            UPDATE dbo.Perf_Downtime
+            SET
+                LossID = @LossID,
+                SubLossID = @SubLossID,
+                Reason = @Reason,
+                LastUpdatedTime = @LastUpdatedTime,
+                UserID = @UserID
+            OUTPUT
+                INSERTED.DowntimeID,
+                INSERTED.[TimeStamp],
+                INSERTED.SubAsslyLineID,
+                INSERTED.StationID,
+                INSERTED.ProdDate,
+                INSERTED.ProdShift,
+                INSERTED.StartTime,
+                INSERTED.EndTime,
+                INSERTED.CurrentDT,
+                INSERTED.TotalDT,
+                INSERTED.LossID,
+                INSERTED.SubLossID,
+                INSERTED.[4MLossID],
+                INSERTED.UserID,
+                INSERTED.Reason,
+                INSERTED.LastUpdatedTime
+            WHERE DowntimeID = @DowntimeID
+        `);
+    
+        return result.recordset[0] || null;
 };
 
 const acknowledgeProductionCall = async (

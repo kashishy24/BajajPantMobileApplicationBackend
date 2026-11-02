@@ -3840,14 +3840,14 @@ await updateAuditRequest.query(`
     // Debug
     // --------------------------------------------------
     
-    console.log(
-        `Common columns ${configTable} → ${executeTable}:`,
-        insertColumns
-            .map(column => ({
-                config: column.configColumn,
-                execute: column.executeColumn
-            }))
-    );
+    // console.log(
+    //     `Common columns ${configTable} → ${executeTable}:`,
+    //     insertColumns
+    //         .map(column => ({
+    //             config: column.configColumn,
+    //             execute: column.executeColumn
+    //         }))
+    //);
     
     
     // --------------------------------------------------
@@ -5343,10 +5343,10 @@ const confirmAuditList = async (
                     .map(row => `[${row.COLUMN_NAME}]`)
                     .join(", ");
         
-            console.log(
-                "History Insert Columns:",
-                columns
-            );
+            // console.log(
+            //     "History Insert Columns:",
+            //     columns
+            // );
         
         
             // ----------------------------------------------
@@ -5643,7 +5643,7 @@ const confirmAuditList = async (
         // Get EnginePartID from Config_PartVariant
         // ==================================================
 
-        console.log("========== STEP 13 START ==========");
+        // console.log("========== STEP 13 START ==========");
         
         const variantRequest =
             new sql.Request(transaction);
@@ -5654,7 +5654,7 @@ const confirmAuditList = async (
             partId
         );
 
-        console.log("Fetching EnginePartID for PartID:", partId);
+        // console.log("Fetching EnginePartID for PartID:", partId);
         
         const variantResult =
             await variantRequest.query(`
