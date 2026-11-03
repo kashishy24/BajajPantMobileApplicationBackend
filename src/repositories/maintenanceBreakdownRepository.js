@@ -557,7 +557,8 @@ const getBreakdownById = async (breakdownId) => {
             LN.LineName,
             E.EquipmentName,
             L.LossName,
-            SL.SubLossName
+            SL.SubLossName,
+            A.AlarmMessage
         FROM dbo.Maint_BreakDown_Log BD
         LEFT JOIN dbo.Config_Station S ON S.StationID = BD.StationID
         LEFT JOIN dbo.Config_SubAssemblyLine SAL ON SAL.SubAsslyLineID = S.SubAsslyLineID
@@ -565,6 +566,7 @@ const getBreakdownById = async (breakdownId) => {
         LEFT JOIN dbo.Config_Equipment E ON E.EquipmentID = BD.EquipmentID
         LEFT JOIN dbo.Config_LossCategory L ON L.LossID = BD.LossID
         LEFT JOIN dbo.Config_SubLossCategory SL ON SL.SubLossID = BD.SubLossID
+        LEFT JOIN dbo.Config_Alarm A             ON A.AlarmID = BD.AlarmID
         WHERE BD.BreakdownID = @BreakdownID;
     `);
 
