@@ -527,12 +527,14 @@ const getOpenBreakdowns = async (stationId) => {
             BD.BDMaintTicket,
             BD.BDRemark,
             BD.AssignedUserID,
-            BD.BDStatus
+            BD.BDStatus,
+            U.UserName AS AssignedUserName
         FROM dbo.Maint_BreakDown_Log BD
         LEFT JOIN dbo.Config_Station S ON S.StationID = BD.StationID
         LEFT JOIN dbo.Config_Equipment E ON E.EquipmentID = BD.EquipmentID
         LEFT JOIN dbo.Config_LossCategory L ON L.LossID = BD.LossID
         LEFT JOIN dbo.Config_SubLossCategory SL ON SL.SubLossID = BD.SubLossID
+        LEFT JOIN dbo.Config_User U ON U.UserID = BD.AssignedUserID
         WHERE BD.BDStatus IN (1, 2, 3, 4)
           AND (@StationID IS NULL OR BD.StationID = @StationID)
         ORDER BY
