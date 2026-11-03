@@ -105,7 +105,7 @@ const assignBreakdown = async ({
                 BDAssignOpenTime = GETDATE(),
                 BDStatus = 3
             WHERE BreakdownID = @BreakdownID
-              AND BDStatus = 2;
+              AND BDStatus IN  (1,2);
 
             SELECT @@ROWCOUNT AS AffectedRows;
         `);
