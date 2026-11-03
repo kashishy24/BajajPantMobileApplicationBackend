@@ -553,6 +553,7 @@ const getBreakdownById = async (breakdownId) => {
     const result = await request.query(`
         SELECT
             BD.*,
+            U.UserName AS AssignedUserName,
             S.StationName,
             LN.LineName,
             E.EquipmentName,
@@ -567,6 +568,7 @@ const getBreakdownById = async (breakdownId) => {
         LEFT JOIN dbo.Config_LossCategory L ON L.LossID = BD.LossID
         LEFT JOIN dbo.Config_SubLossCategory SL ON SL.SubLossID = BD.SubLossID
         LEFT JOIN dbo.Config_Alarm A             ON A.AlarmID = BD.AlarmID
+        LEFT JOIN dbo.Config_User U ON U.UserID = BD.AssignedUserID
         WHERE BD.BreakdownID = @BreakdownID;
     `);
 
