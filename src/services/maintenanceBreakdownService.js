@@ -182,6 +182,19 @@ const getPartsByEngineAndStation = async (engineNo, stationId) => {
   };
 };
 
+const getActivitiesByStation = async (stationId) => {
+  if (!stationId || isNaN(Number(stationId))) {
+    throw new Error("Valid StationID is required.");
+  }
+
+  const activities = await repository.getActivitiesByStation(
+    Number(stationId)
+  );
+
+  return activities;
+};
+
+
 module.exports = {
   getAssignedBreakdowns,
   getMaintenanceOperators,
@@ -193,5 +206,6 @@ module.exports = {
   getLossCodes,
   getSubLossCodes,
   getEquipmentByStation,
-  getPartsByEngineAndStation
+  getPartsByEngineAndStation,
+  getActivitiesByStation
 };

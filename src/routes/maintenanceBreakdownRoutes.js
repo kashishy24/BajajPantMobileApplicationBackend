@@ -18,6 +18,7 @@ router.post("/breakdowns/close", controller.closeBreakdown);
 router.post("/breakdowns", controller.createBreakdown);
 router.get("/equipment/station/:stationId", controller.getEquipmentByStation);
 router.get("/bom/parts", controller.getPartsByEngineAndStation);
+router.get("/activities/station/:stationId", controller.getActivitiesByStation);
 
 
 module.exports = router;

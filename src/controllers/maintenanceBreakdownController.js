@@ -129,6 +129,16 @@ const getPartsByEngineAndStation = async (req, res) => {
   }
 };
 
+const getActivitiesByStation = async (req, res) => {
+  try {
+    const data = await service.getActivitiesByStation(req.params.stationId);
+
+    return successResponse(res, data, "Activities fetched successfully.");
+  } catch (error) {
+    return errorResponse(res, error.message);
+  }
+};
+
 module.exports = {
   getAssignedBreakdowns,
   getMaintenanceOperators,
@@ -140,5 +150,6 @@ module.exports = {
   getLossCodes,
   getSubLossCodes,
   getEquipmentByStation,
-  getPartsByEngineAndStation
+  getPartsByEngineAndStation,
+  getActivitiesByStation
 };

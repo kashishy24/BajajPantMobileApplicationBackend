@@ -666,6 +666,22 @@ const getBomPartsBySkuAndStation = async (skuId, stationId) => {
   return result.recordset;
 };
 
+const getActivitiesByStation = async (stationId) => {
+  const request = new sql.Request();
+  request.input("StationID", sql.Int, stationId);
+
+  const result = await request.query(`
+    SELECT
+        A.ActivityID,
+        A.ActivityDesc
+    FROM dbo.Config_Activity A
+    WHERE A.StationID = @StationID
+    ORDER BY A.StageNo, A.ActivityID;
+  `);
+
+  return result.recordset;
+};
+
 module.exports = {
     getAssignedBreakdowns,
     assignBreakdown,
@@ -678,5 +694,6 @@ module.exports = {
     getMaintenanceOperators,
     getEquipmentByStation,
     getSkuIdByEngineNo,
-    getBomPartsBySkuAndStation
+    getBomPartsBySkuAndStation,
+    getActivitiesByStation
 };
