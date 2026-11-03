@@ -117,6 +117,18 @@ const getEquipmentByStation = async (req, res) => {
   }
 };
 
+const getPartsByEngineAndStation = async (req, res) => {
+  try {
+    const { engineNo, stationId } = req.query;
+
+    const data = await service.getPartsByEngineAndStation(engineNo, stationId);
+
+    return successResponse(res, data, "BOM parts fetched successfully.");
+  } catch (error) {
+    return errorResponse(res, error.message);
+  }
+};
+
 module.exports = {
   getAssignedBreakdowns,
   getMaintenanceOperators,
@@ -127,5 +139,6 @@ module.exports = {
   getBreakdownById,
   getLossCodes,
   getSubLossCodes,
-  getEquipmentByStation
+  getEquipmentByStation,
+  getPartsByEngineAndStation
 };

@@ -155,6 +155,33 @@ const getEquipmentByStation = async (stationId) => {
   return await repository.getEquipmentByStation(id);
 };
 
+const getPartsByEngineAndStation = async (engineNo, stationId) => {
+  if (!engineNo) {
+    throw new Error("EngineNo is required.");
+  }
+  if (!stationId || isNaN(Number(stationId))) {
+    throw new Error("Valid StationID is required.");
+  }
+
+  const skuId = await repository.getSkuIdByEngineNo(engineNo);
+
+  if (!skuId) {
+    throw new Error(`No SKU found for EngineNo ${engineNo}.`);
+  }
+
+  const parts = await repository.getBomPartsBySkuAndStation(
+    skuId,
+    Number(stationId)
+  );
+
+  return {
+    engineNo,
+    stationId: Number(stationId),
+    skuId,
+    parts,
+  };
+};
+
 module.exports = {
   getAssignedBreakdowns,
   getMaintenanceOperators,
@@ -165,5 +192,6 @@ module.exports = {
   getBreakdownById,
   getLossCodes,
   getSubLossCodes,
-  getEquipmentByStation
+  getEquipmentByStation,
+  getPartsByEngineAndStation
 };

@@ -619,7 +619,52 @@ const getEquipmentByStation = async (stationId) => {
     return result.recordset;
 };
 
-module.exports = { getEquipmentByStation };
+const getSkuIdByEngineNo = async (engineNo) => {
+  const request = new sql.Request();
+  request.input("EngineNo", sql.NVarChar(50), engineNo);
+
+  // Current WIP takes priority, history is the fallback.
+  // If an engine has multiple history rows (re-entry), the latest one is used.
+  const result = await request.query(`
+    SELECT TOP 1 SKUID
+    FROM (
+        SELECT SKUID, StartTime, 1 AS Src
+        FROM dbo.Prod_Engine_WIP
+        WHERE EngineNo = @EngineNo
+
+        UNION ALL
+
+        SELECT SKUID, StartTime, 2 AS Src
+        FROM dbo.Prod_Engine_WIPHistory
+        WHERE EngineNo = @EngineNo
+    ) X
+    ORDER BY Src ASC, StartTime DESC;
+  `);
+
+  return result.recordset[0]?.SKUID ?? null;
+};
+
+const getBomPartsBySkuAndStation = async (skuId, stationId) => {
+  const request = new sql.Request();
+  request.input("SKUID", sql.Int, skuId);
+  request.input("StationID", sql.Int, stationId);
+
+  const result = await request.query(`
+    SELECT
+        B.UID,
+        B.SKUID,
+        B.PartID,
+        B.PartDesc,
+        B.StationID,
+        B.MesControlled
+    FROM dbo.Config_BOM B
+    WHERE B.SKUID = @SKUID
+      AND B.StationID = @StationID
+    ORDER BY B.PartLevel, B.PartID;
+  `);
+
+  return result.recordset;
+};
 
 module.exports = {
     getAssignedBreakdowns,
@@ -631,5 +676,7 @@ module.exports = {
     getLossCodes,
     getSubLossCodes,
     getMaintenanceOperators,
-    getEquipmentByStation
+    getEquipmentByStation,
+    getSkuIdByEngineNo,
+    getBomPartsBySkuAndStation
 };
