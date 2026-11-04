@@ -182,18 +182,47 @@ const getPartsByEngineAndStation = async (engineNo, stationId) => {
   };
 };
 
-const getActivitiesByStation = async (stationId) => {
+// const getActivitiesByStation = async (stationId) => {
+//   if (!stationId || isNaN(Number(stationId))) {
+//     throw new Error("Valid StationID is required.");
+//   }
+
+//   const activities = await repository.getActivitiesByStation(
+//     Number(stationId)
+//   );
+
+//   return activities;
+// };
+
+const getActivitiesByStation = async (stationId, reasonId) => {
   if (!stationId || isNaN(Number(stationId))) {
     throw new Error("Valid StationID is required.");
   }
 
-  const activities = await repository.getActivitiesByStation(
-    Number(stationId)
-  );
+  let activityType = null; // null = all activities for the station
 
-  return activities;
+  if (reasonId !== undefined && reasonId !== null && reasonId !== "") {
+    if (isNaN(Number(reasonId))) {
+      throw new Error("Valid ReasonID is required.");
+    }
+
+    const reason = await repository.getReasonById(Number(reasonId));
+    if (!reason) {
+      throw new Error("Reason not found.");
+    }
+
+    const name = (reason.ReasonName || "").trim().toLowerCase();
+
+    if (name.includes("torque")) {
+      activityType = 4;
+    } else if (name === "sop" || name.includes("sop")) {
+      activityType = 6;
+    }
+    // Poka Yoka and any other reason: all activities for the station
+  }
+
+  return repository.getActivitiesByStation(Number(stationId), activityType);
 };
-
 
 module.exports = {
   getAssignedBreakdowns,

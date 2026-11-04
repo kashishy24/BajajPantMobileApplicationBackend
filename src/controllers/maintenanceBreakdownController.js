@@ -129,9 +129,22 @@ const getPartsByEngineAndStation = async (req, res) => {
   }
 };
 
+// const getActivitiesByStation = async (req, res) => {
+//   try {
+//     const data = await service.getActivitiesByStation(req.params.stationId);
+
+//     return successResponse(res, data, "Activities fetched successfully.");
+//   } catch (error) {
+//     return errorResponse(res, error.message);
+//   }
+// };
+
 const getActivitiesByStation = async (req, res) => {
   try {
-    const data = await service.getActivitiesByStation(req.params.stationId);
+    const data = await service.getActivitiesByStation(
+      req.params.stationId,
+      req.query.reasonId
+    );
 
     return successResponse(res, data, "Activities fetched successfully.");
   } catch (error) {

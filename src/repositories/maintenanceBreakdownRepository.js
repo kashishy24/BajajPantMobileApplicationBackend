@@ -670,9 +670,39 @@ const getBomPartsBySkuAndStation = async (skuId, stationId) => {
   return result.recordset;
 };
 
-const getActivitiesByStation = async (stationId) => {
+// const getActivitiesByStation = async (stationId) => {
+//   const request = new sql.Request();
+//   request.input("StationID", sql.Int, stationId);
+
+//   const result = await request.query(`
+//     SELECT
+//         A.ActivityID,
+//         A.ActivityDesc
+//     FROM dbo.Config_Activity A
+//     WHERE A.StationID = @StationID
+//     ORDER BY A.StageNo, A.ActivityID;
+//   `);
+
+//   return result.recordset;
+// };
+
+const getReasonById = async (reasonId) => {
+  const request = new sql.Request();
+  request.input("ReasonID", sql.Int, reasonId);
+
+  const result = await request.query(`
+    SELECT UID, ReasonName
+    FROM dbo.Config_TicketReason
+    WHERE UID = @ReasonID;
+  `);
+
+  return result.recordset[0] || null;
+};
+
+const getActivitiesByStation = async (stationId, activityType = null) => {
   const request = new sql.Request();
   request.input("StationID", sql.Int, stationId);
+  request.input("ActivityType", sql.Int, activityType);
 
   const result = await request.query(`
     SELECT
@@ -680,6 +710,7 @@ const getActivitiesByStation = async (stationId) => {
         A.ActivityDesc
     FROM dbo.Config_Activity A
     WHERE A.StationID = @StationID
+      AND (@ActivityType IS NULL OR A.ActivityType = @ActivityType)
     ORDER BY A.StageNo, A.ActivityID;
   `);
 
@@ -699,5 +730,6 @@ module.exports = {
     getEquipmentByStation,
     getSkuIdByEngineNo,
     getBomPartsBySkuAndStation,
+    getReasonById,
     getActivitiesByStation
 };
