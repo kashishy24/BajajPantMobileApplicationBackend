@@ -12,7 +12,8 @@ const materialStoreRoutes = require("./src/routes/materialStoreRoutes");
 const ticketRoutes = require("./src/routes/ticketRoutes");
 const productionRoutes = require("./src/routes/productionRoutes");
 const maintenanceBreakdownRoutes = require("./src/routes/maintenanceBreakdownRoutes");
-
+const PMLargeDeviceRoutes = require("./src/routes/PMLargeDeviceRoutes");
+const PMSmallDeviceRoutes = require("./src/routes/PMSmallDeviceRoutes");
 
 const { connectDB } = require("./src/config/db");
 
@@ -43,6 +44,8 @@ app.use("/api/material-store", materialStoreRoutes);
 app.use("/api/tickets", ticketRoutes);
 app.use("/api/productionSupervisor", productionRoutes);
 app.use("/api/maintenance", maintenanceBreakdownRoutes);
+app.use("/api/pmLargeDevice", PMLargeDeviceRoutes);
+app.use("/api/pmSmallDevice", PMSmallDeviceRoutes);
 
 const PORT = process.env.PORT || 5000;
 
